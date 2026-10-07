@@ -8,6 +8,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # The service-account key is stored as a secret of this GitHub environment.
+    environment: FIREBASE_SERVICE_ACCOUNT
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
