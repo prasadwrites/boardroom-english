@@ -19,7 +19,9 @@ jobs:
       - name: Check Firebase credentials
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SA_AS_VARIABLE: ${{ vars.FIREBASE_SERVICE_ACCOUNT != '' }}
         run: |
+          echo "Saved as a variable instead of a secret: $SA_AS_VARIABLE"
           if [ -z "$SA" ]; then
             echo "::error::The FIREBASE_SERVICE_ACCOUNT secret is empty or not visible to this workflow. Add it under Settings > Secrets and variables > Actions > Repository secrets."
             exit 1
