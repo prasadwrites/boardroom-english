@@ -25,7 +25,7 @@ jobs:
         run: |
           echo "Saved as a variable instead of a secret: $SA_AS_VARIABLE"
           if [ -z "$SA" ]; then
-            echo "::error::The FIREBASE_SERVICE_ACCOUNT secret is empty or not visible to this workflow. Add it under Settings > Secrets and variables > Actions > Repository secrets."
+            echo "::error::The FIREBASE_SERVICE_ACCOUNT secret is empty or not visible to this workflow. Add it under Settings > Environments > FIREBASE_SERVICE_ACCOUNT > Environment secrets."
             exit 1
           fi
           printf '%s' "$SA" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);if(j.type!=="service_account"||!j.private_key)throw new Error("not a service-account key");console.log("Service account key found for "+j.project_id)}catch(e){console.log("::error::FIREBASE_SERVICE_ACCOUNT is set ("+s.length+" chars) but is not a valid service-account JSON key: "+e.message);process.exit(1)}})'
@@ -37,6 +37,18 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
         run: npx --yes firebase-tools@latest deploy --only hosting --project "${{ vars.FIREBASE_PROJECT_ID || 'boardroom-english' }}" --non-interactive --force
+      - name: Store function secrets in Secret Manager
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GENERATE_ACCESS_CODE: ${{ secrets.GENERATE_ACCESS_CODE }}
+          PROJECT: ${{ vars.FIREBASE_PROJECT_ID || 'boardroom-english' }}
+        run: |
+          set_secret() {
+            printf '%s' "$2" | npx --yes firebase-tools@latest functions:secrets:set "$1" --data-file=- --project "$PROJECT" --non-interactive --force
+          }
+          if [ -n "$ANTHROPIC_API_KEY" ]; then set_secret ANTHROPIC_API_KEY "$ANTHROPIC_API_KEY"; else echo "ANTHROPIC_API_KEY not set in GitHub; keeping the existing value in Secret Manager"; fi
+          set_secret GENERATE_ACCESS_CODE "${GENERATE_ACCESS_CODE:-off}"
       - name: Deploy functions (deck generator)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
