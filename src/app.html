@@ -359,6 +359,7 @@ function getGenerator() {
         if (res.status === 429) throw { code: "rate_limited" };
         if (res.status === 404) throw { code: "no_backend" };
         if (res.status === 422) throw { code: "refused" };
+        if (res.status === 402) throw { code: "no_credit" };
         if (!res.ok) throw { code: "upstream_error" };
         return res.json();
       },
@@ -613,6 +614,7 @@ const FATAL = { not_granted: "Claude access was declined for this page. Allow it
   not_declared: "This version of the page can't use Claude. Reload to get the latest version.",
   capability_disabled: "Claude can't be reached from this view. Open the page in claude.ai or the Claude app.",
   capability_removed: "Claude can't be reached from this view. Open the page in claude.ai or the Claude app.",
+  no_credit: "The Anthropic API account behind this site is out of credit. Add credit at console.anthropic.com (Plans & Billing), then try again.",
   rate_limited: "You've reached your Claude usage limit for now. Questions made so far are saved; use Add questions later to finish.",
   session_expired: "Your Claude session expired. Sign in again, then use Add questions to continue.",
   refused: "Claude declined this focus. Try rewording it.",
@@ -639,7 +641,7 @@ async function startGeneration(form) {
       const avoid = target.questions.map((q) => q.term).filter(Boolean).slice(-200);
       const results = await Promise.allSettled(sizes.map((n, k) => gen.batch(meta, n, avoid, SLANTS[(round * 2 + k) % SLANTS.length], g.ctl.signal)));
       round++;
-      let added = 0, fatal = null;
+      let added = 0, fatal = null, failed = 0;
       for (const res of results) {
         if (res.status === "fulfilled") {
           for (const it of cleanItems(res.value)) {
@@ -648,16 +650,17 @@ async function startGeneration(form) {
             seen.add(key); it.id = "q" + target.questions.length; target.questions.push(it); g.made++; added++;
           }
         } else {
-          const code = res.reason && res.reason.code;
+          const code = res.reason && res.reason.code; failed++;
           if (code === "cancelled") fatal = fatal || "cancelled";
           else if (FATAL[code]) fatal = code;
         }
       }
       if (added) { if (!deck) { deck = pending; g.deckId = deck.id; } saveDeck(deck); emptyRounds = 0; g.note = `Latest: “${deck.questions[deck.questions.length - 1].q}”`; }
-      else emptyRounds++;
+      else { emptyRounds++; if (failed === results.length) g.serverErr = true; }
       updateGen();
       if (fatal === "cancelled") break;
       if (fatal) { g.error = FATAL[fatal]; break; }
+      if (emptyRounds >= 2 && g.serverErr) { g.error = "The deck generator ran into an error. Try again in a few minutes; if it keeps happening, the site's server logs will say why."; break; }
       if (emptyRounds >= 2) { g.error = "Claude's replies couldn't be turned into questions. Try a shorter or more specific focus."; break; }
     }
   } catch (e) { g.error = "Something went wrong talking to Claude. Questions made so far are saved."; }

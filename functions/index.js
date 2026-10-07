@@ -81,6 +81,7 @@ export const generate = onRequest(
       return res.json(items);
     } catch (err) {
       if (err instanceof Anthropic.RateLimitError) return res.status(429).json({ error: "Rate limited" });
+      if (err instanceof Anthropic.APIError && /credit balance/i.test(err.message)) { logger.error("Anthropic account is out of credit"); return res.status(402).json({ error: "no_credit" }); }
       if (err instanceof Anthropic.APIError) { logger.error("Claude API error", err.status, err.message); return res.status(502).json({ error: "Claude API error" }); }
       logger.error("Unexpected error", err);
       return res.status(500).json({ error: "Unexpected error" });
