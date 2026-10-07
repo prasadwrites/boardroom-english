@@ -25,9 +25,9 @@ On the web, progress and your own decks are saved in the browser's localStorage.
 1. Create a Firebase project and upgrade it to the **Blaze** plan (Cloud Functions need it). Put its project ID in `.firebaserc`, or set the `FIREBASE_PROJECT_ID` repository variable.
 2. Store your Anthropic API key as a function secret:
    `firebase functions:secrets:set ANTHROPIC_API_KEY`
-3. Optional but recommended, so strangers can't spend your API credit:
+3. Set an access code so strangers can't spend your API credit:
    `firebase functions:secrets:set GENERATE_ACCESS_CODE`
-   If you don't want an access code, set this secret to an empty value. The app asks for the code on the New deck form.
+   To skip the code, set this secret to `off`. Otherwise the app asks for the code on the New deck form.
 4. Deploy from your machine with `firebase deploy`, or let GitHub Actions do it: add a service-account key with the Firebase Admin role as the `FIREBASE_SERVICE_ACCOUNT` repository secret, then push to `main`.
 
 ## Local preview

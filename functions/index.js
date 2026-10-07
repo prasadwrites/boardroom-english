@@ -50,7 +50,7 @@ export const generate = onRequest(
     if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
     const required = GENERATE_ACCESS_CODE.value();
     const body = req.body || {};
-    if (required && body.code !== required) return res.status(401).json({ error: "Access code required" });
+    if (required && required !== "off" && body.code !== required) return res.status(401).json({ error: "Access code required" });
 
     const meta = {
       name: clip(body.name, 60) || "My deck",
