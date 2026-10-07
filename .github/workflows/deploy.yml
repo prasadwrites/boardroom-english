@@ -29,10 +29,18 @@ jobs:
             exit 1
           fi
           printf '%s' "$SA" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);if(j.type!=="service_account"||!j.private_key)throw new Error("not a service-account key");console.log("Service account key found for "+j.project_id)}catch(e){console.log("::error::FIREBASE_SERVICE_ACCOUNT is set ("+s.length+" chars) but is not a valid service-account JSON key: "+e.message);process.exit(1)}})'
-      - name: Deploy hosting and functions
+      - name: Write credentials
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          printf '%s' "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > "$RUNNER_TEMP/sa.json"
-          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
-          npx --yes firebase-tools@latest deploy --only hosting,functions --project "${{ vars.FIREBASE_PROJECT_ID || 'boardroom-english' }}" --non-interactive --force
+        run: printf '%s' "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > "$RUNNER_TEMP/sa.json"
+      - name: Deploy hosting
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: npx --yes firebase-tools@latest deploy --only hosting --project "${{ vars.FIREBASE_PROJECT_ID || 'boardroom-english' }}" --non-interactive --force
+      - name: Deploy functions (deck generator)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: npx --yes firebase-tools@latest deploy --only functions --project "${{ vars.FIREBASE_PROJECT_ID || 'boardroom-english' }}" --non-interactive --force
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
