@@ -1,0 +1,23 @@
+name: Read function logs
+on:
+  workflow_dispatch:
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    environment: FIREBASE_SERVICE_ACCOUNT
+    steps:
+      - name: Write credentials
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+      - name: Read recent logs for the deck generator
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
+          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="generate" AND (severity>=WARNING OR httpRequest.status>=400)' \
+            --project boardroom-english --freshness=1d --limit 40 \
+            --format='table(timestamp, severity, httpRequest.status, httpRequest.latency, textPayload, jsonPayload.message)'
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
