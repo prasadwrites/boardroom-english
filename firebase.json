@@ -1,0 +1,16 @@
+{
+  "hosting": {
+    "public": "public",
+    "predeploy": ["node scripts/build.mjs"],
+    "ignore": ["firebase.json", "**/.*"],
+    "rewrites": [
+      { "source": "/api/generate", "function": { "functionId": "generate", "region": "us-central1" } }
+    ],
+    "headers": [
+      { "source": "/index.html", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    ]
+  },
+  "functions": [
+    { "source": "functions", "codebase": "default", "runtime": "nodejs22" }
+  ]
+}

@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Business English flashcards with Repeat and Learned piles and AI-generated decks.">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Boardroom English</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a desk of index cards. One column of work (deck grid, then a single card in play), max 960px, cool slate desk under white cards. */
+:root {
+  --bg: #E7ECF2;
+  --surface: #FFFFFF;
+  --ink: #142339;
+  --muted: #586A80;
+  --line: #CAD4E0;
+  --rule: #E3EAF3;
+  --accent: #1D57C4;
+  --accent-ink: #FFFFFF;
+  --mark: #FFD94A;
+  --margin: #E59A9A;
+  --good: #17784A;
+  --good-bg: #E2F4EA;
+  --bad: #B83A33;
+  --bad-bg: #FBE7E5;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --shadow: 0 1px 2px rgba(20,35,57,.08), 0 6px 18px rgba(20,35,57,.07);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1520; --surface: #162130; --ink: #E5ECF4; --muted: #93A4B9; --line: #2B3B50; --rule: #1D2A3B;
+    --accent: #6C9EFF; --accent-ink: #0D1520; --mark: #E2BE36; --margin: #8A4B4B;
+    --good: #52C78F; --good-bg: #133326; --bad: #F2837A; --bad-bg: #3A1D1C;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1520; --surface: #162130; --ink: #E5ECF4; --muted: #93A4B9; --line: #2B3B50; --rule: #1D2A3B;
+  --accent: #6C9EFF; --accent-ink: #0D1520; --mark: #E2BE36; --margin: #8A4B4B;
+  --good: #52C78F; --good-bg: #133326; --bad: #F2837A; --bad-bg: #3A1D1C;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 960px; margin: 0 auto; padding-inline: 16px; padding-block: 0 48px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.15; text-wrap: balance; margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Top bar */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-block: 20px 16px; }
+.brand { display: flex; align-items: baseline; gap: 10px; background: none; border: 0; padding: 0; }
+.brand h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em; }
+.brand h1 span { background: linear-gradient(transparent 58%, var(--mark) 58%, var(--mark) 92%, transparent 92%); padding: 0 2px; }
+.sync { font-size: .78rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.sync::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.sync.cloud::before { background: var(--good); }
+
+/* Buttons */
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: .9rem; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--bad); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 600; }
+
+/* Home */
+.intro { color: var(--muted); max-width: 62ch; margin: 0 0 20px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.deck { background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; position: relative; overflow: hidden; }
+.deck::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--deck-c, var(--accent)); }
+.deck h3 { font-size: 1.2rem; }
+.deck .focus { color: var(--muted); font-size: .88rem; margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.eyebrow { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.stats { display: flex; gap: 14px; flex-wrap: wrap; font-family: var(--mono); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.stats b { font-weight: 500; }
+.stats .rep { color: var(--bad); }
+.stats .lrn { color: var(--good); }
+.bar { height: 6px; border-radius: 3px; background: var(--rule); overflow: hidden; display: flex; }
+.bar i { display: block; height: 100%; }
+.bar .l { background: var(--good); }
+.bar .r { background: var(--bad); opacity: .7; }
+.deck .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+.new-deck { border: 2px dashed var(--line); background: transparent; box-shadow: none; align-items: flex-start; justify-content: center; text-align: left; color: var(--ink); min-height: 200px; }
+.new-deck::after { display: none; }
+.new-deck:hover { border-color: var(--accent); }
+.new-deck .plus { font-family: var(--display); font-size: 2rem; line-height: 1; color: var(--accent); }
+.confirm { font-size: .85rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Play */
+.bar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.crumbs { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.crumbs h2 { font-size: 1.25rem; }
+.piles { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: .82rem; font-weight: 600; display: inline-flex; gap: 6px; align-items: baseline; }
+.chip b { font-family: var(--mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+.chip.rep b { color: var(--bad); }
+.chip.lrn b { color: var(--good); }
+button.chip:hover { border-color: var(--accent); }
+
+.card { background: var(--surface); border-radius: 6px; box-shadow: var(--shadow); padding: 22px 22px 22px 38px; position: relative;
+  background-image: linear-gradient(90deg, transparent 26px, var(--margin) 26px, var(--margin) 27px, transparent 27px),
+    repeating-linear-gradient(180deg, transparent 0 31px, var(--rule) 31px 32px);
+  background-position: 0 0, 0 64px; max-width: 720px; margin: 0 auto; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.tag { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; padding: 3px 8px; border-radius: 4px; background: var(--rule); color: var(--muted); }
+.tag.rep { background: var(--bad-bg); color: var(--bad); }
+.tag.new { background: var(--mark); color: #2A2100; }
+.pips { display: inline-flex; gap: 4px; align-items: center; }
+.pips i { width: 10px; height: 10px; border-radius: 2px; border: 1.5px solid var(--good); }
+.pips i.on { background: var(--good); }
+.pips span { font-size: .72rem; color: var(--muted); margin-left: 4px; }
+.question { font-family: var(--display); font-weight: 500; font-size: clamp(1.2rem, 3.4vw, 1.6rem); line-height: 1.3; margin: 0 0 18px; }
+.options { display: grid; gap: 10px; }
+.opt { text-align: left; background: var(--surface); border: 1.5px solid var(--line); border-radius: 8px; padding: 11px 14px; display: flex; gap: 12px; align-items: flex-start; font-size: 1rem; }
+.opt:hover:not(:disabled) { border-color: var(--accent); }
+.opt kbd { font-family: var(--mono); font-size: .75rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; margin-top: 2px; flex: none; }
+.opt:disabled { cursor: default; opacity: .55; }
+.opt.right { border-color: var(--good); background: var(--good-bg); opacity: 1; }
+.opt.wrong { border-color: var(--bad); background: var(--bad-bg); opacity: 1; }
+.feedback { margin-top: 16px; padding: 12px 14px; border-radius: 8px; background: var(--rule); }
+.feedback .verdict { font-weight: 700; }
+.feedback .verdict.ok { color: var(--good); }
+.feedback .verdict.no { color: var(--bad); }
+.feedback p { margin: 4px 0 0; }
+.next-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.hint { font-size: .78rem; color: var(--muted); }
+.session { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 14px; font-variant-numeric: tabular-nums; }
+.empty { text-align: center; padding: 40px 20px; }
+.empty h3 { font-size: 1.4rem; margin-bottom: 8px; }
+.empty p { color: var(--muted); margin: 0 auto 16px; max-width: 46ch; }
+
+/* Piles */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+.tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; font-weight: 600; color: var(--muted); margin-bottom: -1px; }
+.tab[aria-selected="true"] { color: var(--ink); border-color: var(--accent); }
+.pile-list { display: grid; gap: 10px; }
+.pile-item { background: var(--surface); border-radius: 8px; padding: 14px 16px; box-shadow: var(--shadow); display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: start; }
+.pile-item > div { min-width: 0; }
+.pile-item .pq { font-weight: 600; margin: 0; }
+.pile-item .pa { margin: 4px 0 0; color: var(--good); }
+.pile-item .pe { margin: 4px 0 0; color: var(--muted); font-size: .88rem; }
+.pile-item .side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.pile-item .count { font-family: var(--mono); font-size: .75rem; color: var(--muted); white-space: nowrap; }
+@media (max-width: 520px) { .pile-item { grid-template-columns: 1fr; } .pile-item .side { align-items: flex-start; flex-direction: row; } }
+
+/* Create */
+.panel { background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); padding: 22px; max-width: 720px; }
+.form { display: grid; gap: 16px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field label { font-weight: 600; font-size: .9rem; }
+.field .help { font-size: .8rem; color: var(--muted); }
+.field input, .field select, .field textarea { border: 1.5px solid var(--line); border-radius: 8px; padding: 9px 11px; background: var(--surface); width: 100%; }
+.field textarea { min-height: 90px; resize: vertical; }
+.row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 560px) { .row3 { grid-template-columns: 1fr; } }
+.chips-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip-btn { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 4px 10px; font-size: .8rem; }
+.chip-btn:hover { border-color: var(--accent); }
+.gen { margin-top: 18px; padding: 14px; border-radius: 8px; background: var(--rule); display: grid; gap: 10px; }
+.gen .meter { height: 8px; border-radius: 4px; background: var(--surface); overflow: hidden; }
+.gen .meter i { display: block; height: 100%; background: var(--accent); transition: width .4s ease; }
+.gen .line { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; font-variant-numeric: tabular-nums; }
+.gen .preview { font-size: .85rem; color: var(--muted); margin: 0; }
+.msg { padding: 10px 12px; border-radius: 8px; font-size: .9rem; }
+.msg.err { background: var(--bad-bg); color: var(--bad); }
+.msg.info { background: var(--rule); color: var(--muted); }
+
+#toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 8px; font-size: .88rem; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+@media (prefers-reduced-motion: no-preference) {
+  .card.enter { animation: deal .22s ease-out; }
+  @keyframes deal { from { transform: translateY(6px); opacity: .6; } to { transform: none; opacity: 1; } }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <button class="brand" id="home-btn" type="button" aria-label="All decks"><h1>Boardroom <span>English</span></h1></button>
+    <span class="sync" id="sync">Saved in this browser</span>
+  </header>
+  <main id="app"></main>
+</div>
+<div id="toast" hidden></div>
+
+<script>
+const LEARN_AT = 5;
+const COLORS = ["#1D57C4", "#C0571B", "#17784A", "#7A4CC2", "#B0306A", "#2A8A9A"];
+
+/* ---------- Starter decks: [term, question, [correct, wrong, wrong, wrong], explanation] ---------- */
+const STARTERS = [
+  { id: "b-phrases", name: "Business Phrases", level: "B2", focus: "Everyday expressions people use in meetings, calls and emails: what they mean and when to say them.", rows: [
+    ["touch base", "“Let's touch base next week.” What does the speaker want?", ["To briefly check in with each other", "To sign the final contract", "To restart the project from scratch", "To cancel next week's meeting"], "Touch base = have a short catch-up. “I'll touch base with the client on Monday.”"],
+    ["circle back", "“Can we circle back to this later?” means…", ["Can we return to this topic later?", "Can we drop this topic for good?", "Can we discuss it in a group circle?", "Can we escalate it to management?"], "Circle back = come back to a topic after dealing with something else."],
+    ["on the same page", "“I want to make sure we're on the same page.”", ["We share the same understanding", "We are reading the same document", "We work in the same department", "We have the same job title"], "Being on the same page means agreeing on the facts or plan."],
+    ["ballpark figure", "“Can you give me a ballpark figure?” The speaker wants…", ["A rough estimate", "The final, exact price", "The maximum budget", "A figure from last year"], "A ballpark figure is an approximate number. “Ballpark, we're looking at €20k.”"],
+    ["take this offline", "“Let's take this offline.”", ["Let's discuss this separately, outside this meeting", "Let's stop using the internet", "Let's postpone it indefinitely", "Let's send it by post"], "Used to stop a side discussion from taking over a meeting."],
+    ["move the needle", "“This campaign didn't really move the needle.”", ["It didn't make a noticeable difference", "It didn't change the schedule", "It wasn't measured correctly", "It finished late"], "Move the needle = produce a visible, measurable impact."],
+    ["keep me in the loop", "“Please keep me in the loop.”", ["Keep me informed about developments", "Invite me to speak at every meeting", "Repeat the information to me", "Let me lead the project"], "Being in the loop = receiving updates. Often answered: “Will do, I'll copy you in.”"],
+    ["low-hanging fruit", "“Let's go for the low-hanging fruit first.”", ["Start with the easy wins", "Start with the cheapest products", "Give tasks to junior staff", "Deal with overdue tasks"], "Low-hanging fruit = tasks that are easy and give quick results."],
+    ["bandwidth", "“I don't have the bandwidth for this right now.”", ["I don't have the time or capacity", "My internet is too slow", "I don't have the authority", "I don't have the budget"], "In office talk, bandwidth means capacity to take on work."],
+    ["walk me through", "“Could you walk me through the proposal?”", ["Could you explain it step by step?", "Could you accompany me to the office?", "Could you summarise it in one line?", "Could you print it for me?"], "Walk someone through something = explain it in detail, in order."],
+    ["disagreeing politely", "Which is the most professional way to disagree in a meeting?", ["“I see your point, but I'd suggest a different approach.”", "“That's just wrong.”", "“No way, that won't work.”", "“You don't understand the problem.”"], "Acknowledge first (“I see your point”), then offer your view."],
+    ["interrupting politely", "You need to interrupt a colleague. What do you say?", ["“Sorry to cut in, but could I add something here?”", "“Stop talking, please.”", "“Wait, my turn now.”", "“Excuse, I speak now.”"], "“Sorry to cut in” or “If I could just jump in…” softens an interruption."],
+    ["get the ball rolling", "“To get the ball rolling, let's hear from sales.”", ["To start things off", "To finish the meeting", "To pass responsibility on", "To slow things down"], "Get the ball rolling = begin an activity or discussion."],
+    ["drop the ball", "“I'm afraid I dropped the ball on that report.”", ["I failed to do something I was responsible for", "I resigned from the project", "I reduced the price", "I handed it to someone else"], "Drop the ball = make a mistake by not doing something you should have."],
+    ["get back to you", "“I'll get back to you on that.”", ["I'll reply once I've checked", "I disagree with you", "I'll return to my office", "I'll forward it to someone else"], "A useful way to buy time when you don't have the answer yet."],
+    ["table (US)", "In a US meeting: “Let's table this for now.”", ["Let's postpone discussing it", "Let's put it on the agenda now", "Let's write it in a table", "Let's take a vote"], "Careful: in British English “table” a topic means to raise it for discussion."],
+    ["opening a meeting", "What's a natural way to open a meeting?", ["“Shall we get started? First on the agenda is…”", "“Okay, everybody, listen to me.”", "“Meeting begins.”", "“Now we talk.”"], "“Shall we get started?” or “Let's kick off” are common openers."],
+    ["closing a meeting", "Which phrase best wraps up a meeting?", ["“To sum up, we've agreed to…”", "“That's all, bye.”", "“Finished, you can go.”", "“End of talking.”"], "Summarise decisions and owners before you close."],
+    ["polite request", "Which request is most polite in an email?", ["“Would you mind sending me the report by Friday?”", "“Send the report Friday.”", "“You must send the report by Friday.”", "“I want the report Friday.”"], "“Would you mind + -ing” is a soft, polite request form."],
+    ["going forward", "“Going forward, all invoices need a PO number.”", ["From now on", "In the past", "When moving between offices", "Only for urgent invoices"], "Going forward = from this point in time onwards."],
+    ["win-win", "“This deal is a win-win.”", ["Both sides benefit", "One side wins twice", "It's a close competition", "Nobody gains anything"], "A win-win outcome is good for everyone involved."],
+    ["buying time", "In a negotiation you need time to think. What do you say?", ["“Let me run this by my team and come back to you.”", "“I don't know.”", "“Whatever you think.”", "“Maybe, maybe not.”"], "Run something by someone = check it with them before deciding."],
+    ["hit the ground running", "“We need someone who can hit the ground running.”", ["Someone who can start working effectively straight away", "Someone who starts without a plan", "Someone who is very athletic", "Someone who fails early and learns"], "Common in job adverts and onboarding conversations."],
+    ["think outside the box", "“We need to think outside the box here.”", ["We need to think creatively", "We need to work outside the office", "We need to ignore the rules", "We need to change the packaging"], "Means finding new, unconventional ideas."],
+    ["heads-up", "“Just a heads-up: the client call moved to 3pm.”", ["Advance warning or notice", "A request for approval", "A complaint", "A promotion announcement"], "Give someone a heads-up = warn them in advance."],
+  ]},
+  { id: "b-vocab", name: "Core Vocabulary", level: "B2", focus: "Single words and short terms that come up constantly in business conversations: finance, projects, people and strategy.", rows: [
+    ["leverage", "To leverage something means to…", ["Use it to gain the maximum advantage", "Lift something heavy", "Reduce its cost", "Negotiate a lower price for it"], "“We can leverage our existing customer base.”"],
+    ["stakeholder", "A stakeholder is…", ["A person or group with an interest in a project or company", "Someone who only invests money", "A supplier", "The company's founder"], "Customers, staff, investors and regulators can all be stakeholders."],
+    ["deliverable", "A deliverable is…", ["A specific output a project must produce", "A delivery van", "A project deadline", "A budget line"], "“The main deliverable is a 20-page market report.”"],
+    ["revenue", "Revenue is…", ["Income from sales before costs are taken off", "Profit after all costs", "Tax paid to the government", "Money invested by shareholders"], "Revenue minus costs = profit."],
+    ["profit margin", "“Our margins are getting squeezed.” Margin here means…", ["The difference between selling price and cost", "Total sales", "Customer discounts", "The edge of the page"], "Squeezed margins = less profit on each sale."],
+    ["bottleneck", "A bottleneck in a process is…", ["A point where work slows down or gets stuck", "The fastest step", "The final quality check", "A type of packaging"], "“Approvals are the bottleneck; everything waits for sign-off.”"],
+    ["scalable", "A scalable business model is one that…", ["Can grow without costs rising at the same rate", "Can be measured easily", "Is very expensive to run", "Only works for a short time"], "Software is often highly scalable."],
+    ["incentive", "An incentive is…", ["Something that motivates people to act", "A penalty for poor work", "A pay cut", "A legal clause"], "“We offer a sales incentive of 5% commission.”"],
+    ["benchmark", "To benchmark performance means to…", ["Compare it against a standard or competitors", "Set the final target", "Audit the accounts", "Reward the best team"], "“We benchmark our prices against the top three competitors.”"],
+    ["streamline", "To streamline a process means to…", ["Make it simpler and more efficient", "Add more staff to it", "Outsource it", "Broadcast it online"], "“We streamlined onboarding from ten steps to four.”"],
+    ["mitigate", "“We need to ___ the risks before launch.”", ["mitigate", "mitigation", "mitigating", "mitigated"], "After “need to” we use the base verb: mitigate = reduce the impact of."],
+    ["liaise", "To liaise with another team means to…", ["Communicate and work together with them", "Hire people from them", "Supervise them", "Negotiate their salaries"], "“I'll liaise with IT about the new laptops.”"],
+    ["consensus", "Reaching a consensus means…", ["Reaching general agreement", "Winning a vote by one", "Running a survey", "The boss deciding alone"], "“We couldn't reach a consensus, so we'll revisit it.”"],
+    ["outsource", "To outsource work means to…", ["Pay an outside company to do it", "Move the office abroad", "Export products", "Work outdoors"], "“We outsource payroll to a specialist firm.”"],
+    ["staff turnover", "“Staff turnover is high here.” This means…", ["Many employees leave and are replaced", "Staff earn high salaries", "Staff are very productive", "Staff work a lot of overtime"], "In UK English, a company's turnover can also mean its total sales."],
+    ["forecast", "A sales forecast is…", ["A prediction of future sales", "A record of last year's sales", "Today's sales report", "A limit on spending"], "“We've revised our Q4 forecast upwards.”"],
+    ["headcount", "“We can't increase headcount this year.”", ["We can't hire more employees", "We can't hold bigger meetings", "We can't promote anyone", "We can't add more departments"], "Headcount = the number of people employed."],
+    ["onboarding", "Onboarding refers to…", ["Helping new employees or customers get started", "Boarding a business flight", "Signing a contract", "Letting staff go"], "“The onboarding programme lasts two weeks.”"],
+    ["formal: request", "Which is the most formal way to say “ask for”?", ["request", "grab", "chase up", "bug"], "“I would like to request an extension.”"],
+    ["formal: obtain", "Which is the most formal alternative to “get”?", ["obtain", "grab", "snag", "fetch"], "“Please obtain approval before ordering.”"],
+    ["agenda", "A meeting agenda is…", ["The list of topics to discuss", "A secret motive", "The office calendar", "The written record of the meeting"], "“Let's add pricing to the agenda.”"],
+    ["minutes", "“Who's taking the minutes?”", ["Who is writing the record of the meeting?", "Who is keeping track of time?", "Who is noting small details only?", "Who is setting deadlines?"], "Minutes = the official notes of what was said and decided."],
+    ["feasible", "A feasible plan is…", ["Possible and practical to carry out", "Guaranteed to be profitable", "Urgent", "Already approved"], "“Is a June launch feasible?”"],
+    ["Q3", "“We'll launch in Q3.”", ["In the third quarter of the year", "After the third question", "At quality level three", "After the third quote"], "Q1 to Q4 = the four three-month quarters of the (financial) year."],
+    ["follow up", "“I'll follow up with the supplier.”", ["I'll contact them again to take further action", "I'll lead the supplier", "I'll postpone talking to them", "I'll replace the supplier"], "A follow-up (noun) is the email or call itself."],
+  ]},
+  { id: "b-meetings", name: "Meetings & Calls", level: "B1–B2", focus: "Pick the best thing to say in real situations on video calls and in meetings.", rows: [
+    ["checking the line", "You've just joined a video call as the host. What do you say?", ["“Hi everyone, can you all hear and see me okay?”", "“Is this working or not?”", "“Hello, test, test.”", "“You can hear me, yes?”"], "Checking audio and video first is polite and practical."],
+    ["you're on mute", "A colleague is talking but nobody can hear them. You say…", ["“I think you're on mute.”", "“You aren't speaking.”", "“Your voice is closed.”", "“Turn on your talking.”"], "The most common sentence on any video call."],
+    ["clarifying", "You're not sure which numbers someone means. You ask…", ["“Just to clarify, do you mean the Q3 or Q4 figures?”", "“Which numbers? Be clear.”", "“You are confusing me.”", "“What numbers you mean?”"], "“Just to clarify…” signals a genuine question, not a challenge."],
+    ["checking understanding", "You want to confirm a deadline. You say…", ["“So, if I understand correctly, you need it by Tuesday?”", "“Tuesday, right? Obviously.”", "“You said Tuesday, I think, maybe.”", "“Repeat the deadline.”"], "Paraphrasing back avoids costly misunderstandings."],
+    ["handing over", "You're passing to a colleague to present. You say…", ["“I'll hand over to Maria, who'll take you through the numbers.”", "“Maria, your turn, go.”", "“Now Maria talks.”", "“I finished, Maria next.”"], "Take someone through something = present it in detail."],
+    ["running late", "You'll join five minutes late. You message…", ["“Apologies, I'm running about five minutes late.”", "“Late. Start without me maybe.”", "“I come later.”", "“Sorry, I'm being late.”"], "Running late is the natural phrase; avoid “I'm being late”."],
+    ["parking a topic", "The discussion drifts off-topic. You say…", ["“Good point, but let's park that for now and stick to the agenda.”", "“That's not important.”", "“Stop, that's off-topic.”", "“Nobody asked about that.”"], "Park a topic = set it aside to return to later."],
+    ["giving an opinion", "Which is a natural way to give your opinion?", ["“From my perspective, the timeline is too tight.”", "“In my opinion, I think that, for me, it's tight.”", "“The timeline is bad, obviously.”", "“According to me, the timeline is tight.”"], "“According to me” is a common learner error; use “In my view” or “From my perspective”."],
+    ["strong agreement", "You completely agree. You say…", ["“I couldn't agree more.”", "“I could agree more.”", "“I am agree.”", "“Agree, yes, sure, fine.”"], "“I couldn't agree more” = I agree 100%."],
+    ["partial agreement", "You agree only partly. You say…", ["“I agree up to a point, but we need to consider costs.”", "“Half yes, half no.”", "“I agree but no.”", "“Maybe you are right a little.”"], "“Up to a point” or “To some extent” signal partial agreement."],
+    ["making a suggestion", "Which is a good way to make a suggestion?", ["“How about we split the task between the two teams?”", "“You must split the task.”", "“Split it, okay?”", "“Why don't split the task?”"], "“How about we…” / “Why don't we…” are friendly suggestion forms."],
+    ["declining politely", "You can't do what a client asks this week. You say…", ["“I'm afraid that won't be possible this week.”", "“No, impossible.”", "“We can't, sorry, bye.”", "“That is not my problem this week.”"], "“I'm afraid…” softens bad news."],
+    ["inviting input", "A quiet colleague hasn't spoken. You say…", ["“Priya, what are your thoughts on this?”", "“Priya, why are you so quiet?”", "“Priya, say something.”", "“Priya, do you have no opinion?”"], "An open question invites input without putting someone on the spot."],
+    ["ending a call", "Which is the best way to end a call?", ["“Thanks, everyone. I'll send round the action points after the call.”", "“Okay, done, bye.”", "“That's enough for today.”", "“You can all leave now.”"], "Send round = share with everyone. Action points = agreed next tasks."],
+    ["asking to slow down", "Someone is speaking too fast. You say…", ["“Could you go over that a bit more slowly?”", "“Slow, please.”", "“You speak too fast.”", "“What? Again, slower.”"], "Go over something = explain or review it."],
+    ["bad connection", "A colleague's audio keeps cutting out. You say…", ["“You're breaking up a bit. Could you say that again?”", "“Your internet is terrible.”", "“I hear nothing from you, ever.”", "“You are broken.”"], "Breaking up = the audio is cutting in and out."],
+    ["introducing yourself", "You introduce yourself at a meeting. You say…", ["“Hi, I'm Sam. I head up the logistics team.”", "“My name is Sam, I am logistics.”", "“I'm Sam, the logistics boss person.”", "“Sam here, logistic chief.”"], "Head up = lead or manage."],
+    ["delivering bad news", "You need to report a delay. You say…", ["“Unfortunately, we've run into a delay with the supplier.”", "“Bad news: supplier failed, not our fault.”", "“The supplier is late again, typical.”", "“There is a big problem, everything is late.”"], "“Unfortunately” + “run into” keeps it factual and calm."],
+    ["follow-up email", "Which is a good opening line for a follow-up email?", ["“Thanks for your time earlier. As discussed, I've attached the proposal.”", "“Here is the thing you wanted.”", "“As I told you before, see attached.”", "“Please find the proposal, which you asked.”"], "“As discussed” links the email to the conversation."],
+    ["confirming next steps", "You want to confirm next steps. You say…", ["“So the next step is for you to send the draft by Friday, correct?”", "“You send draft Friday. Okay?”", "“Draft. Friday. Don't forget.”", "“I hope maybe you'll send something Friday.”"], "End every meeting knowing who does what by when."],
+  ]},
+];
+const BUILTINS = STARTERS.map((d, i) => ({ id: d.id, name: d.name, level: d.level, focus: d.focus, builtin: true, color: COLORS[i],
+  questions: d.rows.map((r, j) => ({ id: "q" + j, term: r[0], q: r[1], options: r[2], answer: 0, explain: r[3] })) }));
+
+/* ---------- helpers ---------- */
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+let toastTimer;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2600); }
+
+/* ---------- storage: the viewer's private Claude store, with this browser as a cache/fallback ---------- */
+const LS_KEY = "boardroom-english.v1";
+function lsRead() { try { const v = JSON.parse(localStorage.getItem(LS_KEY)); if (v && v.decks && v.progress) return v; } catch {} return { decks: {}, progress: {} }; }
+let lsTimer;
+function lsWrite() { clearTimeout(lsTimer); lsTimer = setTimeout(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(local)); } catch {} }, 150); }
+let local = lsRead();
+const cloud = { db: null, uid: null };
+const writing = {}, pending = {};
+function ref(docId) { return cloud.db.collection("data/users/" + cloud.uid).doc(docId); }
+function queueWrite(docId, get) { if (!cloud.db) return; pending[docId] = get; if (!writing[docId]) flush(docId); }
+async function flush(docId) {
+  writing[docId] = true;
+  while (pending[docId]) {
+    const get = pending[docId]; delete pending[docId];
+    const body = get();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { if (body) await ref(docId).set(body); else await ref(docId).delete(); break; }
+      catch (e) {
+        if (e && e.code === "unavailable" && attempt === 0) { await sleep(600 + Math.random() * 900); continue; }
+        if (e && e.code === "quota_exceeded") toast("Your storage is full. Delete a deck to make room.");
+        else toast("Couldn't save to your account. Progress is kept in this browser.");
+        break;
+      }
+    }
+  }
+  writing[docId] = false;
+}
+const progBody = (id) => ({ deckId: id, cards: local.progress[id] || {}, updatedAt: Date.now() });
+function saveProgress(deckId) { lsWrite(); queueWrite("prog-" + deckId, () => progBody(deckId)); }
+function saveDeck(deck) { local.decks[deck.id] = deck; lsWrite(); queueWrite("deck-" + deck.id, () => local.decks[deck.id] || null); }
+function removeDeck(id) { delete local.decks[id]; delete local.progress[id]; lsWrite(); queueWrite("deck-" + id, () => null); queueWrite("prog-" + id, () => null); }
+const answeredCount = (cards) => Object.values(cards || {}).reduce((n, p) => n + (p.c || 0) + (p.w || 0), 0);
+
+async function initCloud() {
+  if (!window.claude || !window.claude.use) return;
+  try {
+    const [db, user] = await Promise.all([claude.use("db"), claude.use("user")]);
+    if (!db || !user) return;
+    const uid = await user.id();
+    if (!uid) return;
+    const snap = await db.collection("data/users/" + uid).get();
+    cloud.db = db; cloud.uid = uid;
+    const merged = { decks: {}, progress: {} };
+    snap.docs.forEach((d) => {
+      const v = d.data();
+      if (d.id.startsWith("deck-") && v && Array.isArray(v.questions)) merged.decks[v.id] = v;
+      else if (d.id.startsWith("prog-") && v) merged.progress[d.id.slice(5)] = v.cards || {};
+    });
+    for (const id in local.decks) if (!merged.decks[id]) { merged.decks[id] = local.decks[id]; queueWrite("deck-" + id, () => local.decks[id] || null); }
+    for (const id in local.progress) {
+      if (answeredCount(local.progress[id]) > answeredCount(merged.progress[id])) { merged.progress[id] = local.progress[id]; queueWrite("prog-" + id, () => progBody(id)); }
+    }
+    local = merged; lsWrite();
+    const s = $("#sync"); s.textContent = "Synced to your Claude account"; s.classList.add("cloud");
+    if (S.view !== "play" || (S.cur && S.cur.picked != null)) render(); else renderPlayHeader();
+  } catch (e) { console.warn("Store unavailable, using this browser", e); }
+}
+
+/* Deck generation: inside Claude it uses the viewer's Claude account; on the web it calls this site's /api/generate. */
+const IN_CLAUDE = !!(window.claude && window.claude.use);
+let genPromise = null;
+function readCode() { try { return localStorage.getItem("boardroom-english.code") || ""; } catch { return ""; } }
+function saveCode(v) { try { localStorage.setItem("boardroom-english.code", v); } catch {} }
+function getGenerator() {
+  if (genPromise) return genPromise;
+  if (IN_CLAUDE) {
+    genPromise = claude.use("sample").catch(() => null).then((sample) => sample && {
+      batch: (meta, n, avoid, slant, signal) => sample.json(buildPrompt(meta, n, avoid, slant), { signal, cache: false }),
+    });
+  } else {
+    genPromise = Promise.resolve({
+      batch: async (meta, n, avoid, slant, signal) => {
+        let res;
+        try {
+          res = await fetch("/api/generate", { method: "POST", signal, headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...meta, n, avoid, slant, code: readCode() }) });
+        } catch (e) { throw { code: signal.aborted ? "cancelled" : "upstream_error" }; }
+        if (res.status === 401) throw { code: "needs_code" };
+        if (res.status === 429) throw { code: "rate_limited" };
+        if (res.status === 404) throw { code: "no_backend" };
+        if (res.status === 422) throw { code: "refused" };
+        if (!res.ok) throw { code: "upstream_error" };
+        return res.json();
+      },
+    });
+  }
+  return genPromise;
+}
+
+/* ---------- state ---------- */
+const S = { view: "home", deckId: null, cur: null, recent: [], session: { n: 0, ok: 0 }, pileTab: "repeat", confirmDelete: null, gen: null, extendId: null };
+function allDecks() {
+  const mine = Object.values(local.decks).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  return [...mine, ...BUILTINS];
+}
+const getDeck = (id) => BUILTINS.find((d) => d.id === id) || local.decks[id];
+function prog(deckId) { return (local.progress[deckId] ||= {}); }
+function counts(deck) {
+  const P = local.progress[deck.id] || {}; let r = 0, l = 0;
+  for (const q of deck.questions) { const p = P[q.id]; if (p && p.l) l++; else if (p && p.r) r++; }
+  return { total: deck.questions.length, rep: r, lrn: l, active: deck.questions.length - l };
+}
+function go(view, extra = {}) { Object.assign(S, { view }, extra); render(); window.scrollTo({ top: 0 }); }
+
+/* ---------- render ---------- */
+function render() {
+  const app = $("#app");
+  if (S.view === "play") return renderPlay();
+  if (S.view === "piles") return renderPiles();
+  if (S.view === "create") return renderCreate();
+  renderHome(app);
+}
+
+function deckColor(deck, i) { return deck.color || COLORS[i % COLORS.length]; }
+
+function renderHome(app) {
+  const decks = allDecks();
+  app.innerHTML = `
+    <p class="intro">Pick a deck to practise. Cards you miss go to your <strong>Repeat</strong> pile and come back more often. Get a card right ${LEARN_AT} times in a row and it moves to <strong>Learned</strong>, so you stop seeing it.</p>
+    <div class="grid">
+      <button class="deck new-deck" type="button" data-act="create">
+        <span class="plus">+</span>
+        <h3>New deck</h3>
+        <span class="focus">Describe a focus, choose how many questions, and Claude writes the deck for you.</span>
+      </button>
+      ${decks.map((d, i) => deckCard(d, i)).join("")}
+    </div>`;
+}
+function deckCard(d, i) {
+  const c = counts(d);
+  const pl = c.total ? (c.lrn / c.total) * 100 : 0, pr = c.total ? (c.rep / c.total) * 100 : 0;
+  const confirming = S.confirmDelete === d.id;
+  return `<article class="deck" style="--deck-c:${deckColor(d, i)}">
+    <span class="eyebrow">${d.builtin ? "Starter deck" : "Your deck"}${d.level ? " · " + esc(d.level) : ""}</span>
+    <h3>${esc(d.name)}</h3>
+    <p class="focus">${esc(d.focus || "")}</p>
+    <div class="stats"><span><b>${c.total}</b> cards</span><span class="rep"><b>${c.rep}</b> repeat</span><span class="lrn"><b>${c.lrn}</b> learned</span></div>
+    <div class="bar" aria-hidden="true"><i class="l" style="width:${pl}%"></i><i class="r" style="width:${pr}%"></i></div>
+    ${confirming ? `<div class="confirm"><span>Delete this deck and its progress?</span><button class="btn danger" data-act="del-yes" data-id="${d.id}">Delete</button><button class="btn ghost" data-act="del-no">Keep</button></div>` : `
+    <div class="actions">
+      <button class="btn primary" data-act="play" data-id="${d.id}" ${c.total ? "" : "disabled"}>Study</button>
+      <button class="btn" data-act="piles" data-id="${d.id}">Piles</button>
+      ${d.builtin ? "" : `<button class="btn ghost" data-act="extend" data-id="${d.id}">Add questions</button><button class="btn ghost danger" data-act="del" data-id="${d.id}">Delete</button>`}
+    </div>`}
+  </article>`;
+}
+
+/* Play */
+function nextCard(deck) {
+  const P = prog(deck.id);
+  const active = deck.questions.filter((q) => !(P[q.id] && P[q.id].l));
+  if (!active.length) return null;
+  const avoidN = Math.min(4, active.length - 1);
+  const recent = S.recent.slice(-avoidN);
+  const pool = active.filter((q) => !recent.includes(q.id));
+  const rep = pool.filter((q) => P[q.id] && P[q.id].r);
+  const rest = pool.filter((q) => !(P[q.id] && P[q.id].r));
+  const src = rep.length && (!rest.length || Math.random() < 0.45) ? rep : rest;
+  const q = src[Math.floor(Math.random() * src.length)];
+  S.recent.push(q.id); if (S.recent.length > 10) S.recent.shift();
+  return { q, order: shuffle(q.options.map((_, i) => i)), picked: null, learned: false };
+}
+function pips(s) {
+  s = Math.min(s || 0, LEARN_AT);
+  return `<span class="pips" title="${s} of ${LEARN_AT} correct in a row">${Array.from({ length: LEARN_AT }, (_, i) => `<i class="${i < s ? "on" : ""}"></i>`).join("")}<span>${s}/${LEARN_AT}</span></span>`;
+}
+function playHeaderHTML(deck) {
+  const c = counts(deck);
+  return `<div class="crumbs"><button class="link" data-act="home">← Decks</button><h2>${esc(deck.name)}</h2></div>
+    <div class="piles">
+      <span class="chip"><b>${c.active}</b> in play</span>
+      <button class="chip rep" data-act="piles" data-id="${deck.id}" data-tab="repeat"><b>${c.rep}</b> Repeat</button>
+      <button class="chip lrn" data-act="piles" data-id="${deck.id}" data-tab="learned"><b>${c.lrn}</b> Learned</button>
+    </div>`;
+}
+function renderPlayHeader() { const h = $("#play-head"); const deck = getDeck(S.deckId); if (h && deck) h.innerHTML = playHeaderHTML(deck); }
+function renderPlay() {
+  const deck = getDeck(S.deckId);
+  if (!deck) return go("home");
+  if (!S.cur) S.cur = nextCard(deck);
+  const app = $("#app");
+  const cur = S.cur;
+  let body;
+  if (!cur) {
+    body = `<div class="card"><div class="empty"><h3>Every card is learned</h3><p>You've answered all ${deck.questions.length} cards in this deck correctly ${LEARN_AT} times in a row.</p>
+      <div class="next-row" style="justify-content:center"><button class="btn primary" data-act="piles" data-id="${deck.id}" data-tab="learned">Review Learned pile</button>${deck.builtin ? "" : `<button class="btn" data-act="extend" data-id="${deck.id}">Add questions</button>`}</div></div></div>`;
+  } else {
+    const p = prog(deck.id)[cur.q.id] || {};
+    const answered = cur.picked != null;
+    const ok = answered && cur.order[cur.picked] === cur.q.answer;
+    const tag = p.r ? `<span class="tag rep">Repeat pile</span>` : (p.c || p.w) ? `<span class="tag">Practising</span>` : `<span class="tag new">New</span>`;
+    body = `<div class="card ${answered ? "" : "enter"}">
+      <div class="card-head">${tag}${pips(p.s)}</div>
+      <p class="question">${esc(cur.q.q)}</p>
+      <div class="options" role="group" aria-label="Answers">
+        ${cur.order.map((oi, k) => {
+          let cls = "opt";
+          if (answered) { if (oi === cur.q.answer) cls += " right"; else if (k === cur.picked) cls += " wrong"; }
+          return `<button class="${cls}" data-act="pick" data-k="${k}" ${answered ? "disabled" : ""}><kbd>${k + 1}</kbd><span>${esc(cur.q.options[oi])}</span></button>`;
+        }).join("")}
+      </div>
+      ${answered ? `<div class="feedback" role="status">
+        <span class="verdict ${ok ? "ok" : "no"}">${ok ? (cur.learned ? `Correct. ${LEARN_AT} in a row, so this card moves to Learned.` : "Correct.") : "Not quite. This card goes to your Repeat pile."}</span>
+        ${cur.q.explain ? `<p>${esc(cur.q.explain)}</p>` : ""}
+      </div>
+      <div class="next-row"><span class="hint">Press Enter for the next card</span><button class="btn primary" id="next-btn" data-act="next">Next card</button></div>` : `<div class="next-row"><span class="hint">Choose an answer, or press 1–4</span></div>`}
+    </div>`;
+  }
+  const sess = S.session.n ? `<p class="session">This session: ${S.session.ok} of ${S.session.n} correct</p>` : "";
+  app.innerHTML = `<div class="bar-row" id="play-head">${playHeaderHTML(deck)}</div>${body}${sess}`;
+  const nb = $("#next-btn"); if (nb) nb.focus({ preventScroll: true });
+}
+function pick(k) {
+  const cur = S.cur; if (!cur || cur.picked != null) return;
+  const deck = getDeck(S.deckId);
+  cur.picked = k;
+  const ok = cur.order[k] === cur.q.answer;
+  const P = prog(deck.id); const p = (P[cur.q.id] ||= { s: 0, c: 0, w: 0, r: false, l: false });
+  if (ok) { p.c++; p.s++; if (p.s >= LEARN_AT) { p.l = true; p.r = false; cur.learned = true; } }
+  else { p.w++; p.s = 0; p.r = true; }
+  p.t = Date.now();
+  S.session.n++; if (ok) S.session.ok++;
+  saveProgress(deck.id);
+  renderPlay();
+}
+
+/* Piles */
+function renderPiles() {
+  const deck = getDeck(S.deckId); if (!deck) return go("home");
+  const P = prog(deck.id); const c = counts(deck);
+  const tab = S.pileTab;
+  const items = deck.questions.filter((q) => { const p = P[q.id]; return tab === "learned" ? p && p.l : p && p.r && !p.l; })
+    .sort((a, b) => ((P[b.id].t || 0) - (P[a.id].t || 0)));
+  const empty = tab === "learned"
+    ? `<div class="empty"><h3>Nothing learned yet</h3><p>Answer a card correctly ${LEARN_AT} times in a row and it lands here.</p></div>`
+    : `<div class="empty"><h3>Your Repeat pile is empty</h3><p>Any card you get wrong is added here and shows up more often until you learn it.</p></div>`;
+  $("#app").innerHTML = `
+    <div class="bar-row"><div class="crumbs"><button class="link" data-act="home">← Decks</button><h2>${esc(deck.name)}</h2></div>
+      <button class="btn primary" data-act="play" data-id="${deck.id}" ${c.active ? "" : "disabled"}>Study this deck</button></div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="${tab === "repeat"}" data-act="tab" data-tab="repeat">Repeat (${c.rep})</button>
+      <button class="tab" role="tab" aria-selected="${tab === "learned"}" data-act="tab" data-tab="learned">Learned (${c.lrn})</button>
+    </div>
+    <div class="pile-list">${items.length ? items.map((q) => { const p = P[q.id]; return `<div class="pile-item">
+      <div><p class="pq">${esc(q.q)}</p><p class="pa">✓ ${esc(q.options[q.answer])}</p>${q.explain ? `<p class="pe">${esc(q.explain)}</p>` : ""}</div>
+      <div class="side">${tab === "learned" ? `<span class="count">${p.c} right · ${p.w} wrong</span><button class="btn" data-act="unlearn" data-q="${q.id}">Practise again</button>` : `${pips(p.s)}<span class="count">missed ${p.w}×</span>`}</div>
+    </div>`; }).join("") : empty}</div>`;
+}
+
+/* Create / extend */
+const FOCUS_IDEAS = ["Negotiation phrases for closing a deal", "Small talk and networking at conferences", "Phrasal verbs used in office conversations", "Giving and receiving feedback as a manager", "Finance terms for budget meetings", "Presenting data and describing trends", "Handling customer complaints on the phone", "Diplomatic language for saying no"];
+function renderCreate() {
+  const ext = S.extendId ? getDeck(S.extendId) : null;
+  const g = S.gen;
+  const running = g && g.running;
+  $("#app").innerHTML = `
+    <div class="bar-row"><div class="crumbs"><button class="link" data-act="home" ${running ? "disabled" : ""}>← Decks</button><h2>${ext ? "Add questions to " + esc(ext.name) : "New deck"}</h2></div></div>
+    <div class="panel">
+      <form class="form" id="gen-form">
+        ${ext ? "" : `<div class="field"><label for="f-name">Deck name</label><input id="f-name" required maxlength="60" placeholder="e.g. Negotiation English"></div>`}
+        <div class="field"><label for="f-focus">Focus</label>
+          <textarea id="f-focus" required maxlength="600" placeholder="What should these questions train? e.g. Polite phrases for pushing back on deadlines in meetings with senior stakeholders.">${ext ? esc(ext.focus || "") : ""}</textarea>
+          ${ext ? "" : `<div class="chips-row">${FOCUS_IDEAS.map((f) => `<button type="button" class="chip-btn" data-act="idea" data-v="${esc(f)}">${esc(f)}</button>`).join("")}</div>`}
+        </div>
+        <div class="row3">
+          <div class="field"><label for="f-count">Questions</label><input id="f-count" type="number" min="5" max="500" step="5" value="${ext ? 50 : 100}" required><span class="help">5 to 500. Larger decks take a few minutes.</span></div>
+          <div class="field"><label for="f-level">Level</label><select id="f-level">${["B1", "B2", "C1", "C2"].map((l) => `<option ${l === (ext?.level || "B2") ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+          <div class="field"><label for="f-style">Question type</label><select id="f-style">
+            ${["Mixed", "What does it mean?", "Best thing to say in a situation", "Fill in the blank", "Most formal or natural option"].map((s) => `<option ${s === (ext?.style || "Mixed") ? "selected" : ""}>${s}</option>`).join("")}</select></div>
+        </div>
+        ${IN_CLAUDE ? "" : `<div class="field"><label for="f-code">Access code</label><input id="f-code" type="password" autocomplete="off" value="${esc(readCode())}"><span class="help">Only needed if the site owner set one.</span></div>`}
+        <div class="next-row"><span class="hint">${IN_CLAUDE ? "Claude writes the questions using your Claude account." : "Claude writes the questions for you."}</span>
+          <button class="btn primary" type="submit" id="gen-btn" ${running ? "disabled" : ""}>${ext ? "Add questions" : "Create deck"}</button></div>
+      </form>
+      <div id="gen-area">${genHTML()}</div>
+    </div>`;
+  if (g && g.form) { for (const [k, v] of Object.entries(g.form)) { const el = $("#" + k); if (el) el.value = v; } }
+}
+function genHTML() {
+  const g = S.gen; if (!g) return "";
+  const pct = g.target ? Math.min(100, (g.made / g.target) * 100) : 0;
+  const deck = g.deckId ? local.decks[g.deckId] : null;
+  return `<div class="gen" role="status">
+    ${g.running || g.made ? `<div class="line"><strong>${g.running ? "Writing questions…" : g.made >= g.target ? "Deck ready" : "Stopped"}</strong><span>${g.made} of ${g.target}</span></div>
+    <div class="meter"><i style="width:${pct}%"></i></div>` : ""}
+    ${g.note ? `<p class="preview">${esc(g.note)}</p>` : ""}
+    ${g.error ? `<div class="msg err">${esc(g.error)}</div>` : ""}
+    <div class="line">${g.running ? `<span class="hint">You can start studying once the first questions arrive.</span><button class="btn" data-act="stop">Stop</button>`
+      : deck && deck.questions.length ? `<span></span><button class="btn primary" data-act="play" data-id="${deck.id}">Study ${esc(deck.name)}</button>` : ""}</div>
+  </div>`;
+}
+function updateGen() { const a = $("#gen-area"); if (S.view === "create" && a) a.innerHTML = genHTML(); const b = $("#gen-btn"); if (b) b.disabled = !!(S.gen && S.gen.running); }
+
+const SLANTS = ["meetings and presentations", "phone and video calls", "emails and written follow-ups", "negotiation and sales", "feedback and managing people", "small talk and networking", "finance, budgets and numbers", "projects, deadlines and planning", "customer and client conversations", "strategy and decision-making"];
+function buildPrompt({ name, focus, level, style }, n, avoid, slant) {
+  return `You write multiple-choice flashcards for an adult professional improving their SPOKEN Business English.
+
+Deck: ${name}
+Focus: ${focus}
+Learner level (CEFR): ${level}
+Question type: ${style}${style === "Mixed" ? " (vary between meaning, best response in a situation, fill in the blank, and most natural/formal option)" : ""}
+Where it fits the focus, lean toward this setting for this batch: ${slant}.
+
+Write exactly ${n} NEW questions. Each tests one item (a phrase, word, idiom, collocation or response) that people really say at work today.
+${avoid.length ? `Do not test any of these items, which the deck already covers: ${avoid.join("; ")}` : ""}
+
+Rules:
+- 4 options per question, exactly one clearly correct; the other three plausible but wrong (common learner mistakes, wrong meanings, wrong register).
+- Vary which position holds the correct option.
+- Question under 180 characters. Options under 100 characters each.
+- "explain": one or two short sentences on why the answer is right, ideally with a natural example sentence.
+- "term": the item being tested, 1-5 words.
+- Use straight or curly quotes, no markdown.
+
+Reply with only a JSON array, no other text:
+[{"term":"touch base","q":"\\"Let's touch base next week.\\" What does the speaker want?","options":["To briefly check in","To sign the contract","To restart the project","To cancel the meeting"],"answer":0,"explain":"Touch base = have a short catch-up."}]`;
+}
+function cleanItems(v) {
+  const arr = Array.isArray(v) ? v : v && Array.isArray(v.questions) ? v.questions : [];
+  const out = [];
+  for (const it of arr) {
+    if (!it || typeof it.q !== "string" || !Array.isArray(it.options) || it.options.length !== 4) continue;
+    const opts = it.options.map((o) => String(o ?? "").trim());
+    if (opts.some((o) => !o) || new Set(opts.map((o) => o.toLowerCase())).size !== 4) continue;
+    const a = Number(it.answer);
+    if (!Number.isInteger(a) || a < 0 || a > 3) continue;
+    out.push({ term: String(it.term || "").slice(0, 80), q: it.q.trim().slice(0, 400), options: opts.map((o) => o.slice(0, 200)), answer: a, explain: String(it.explain || "").slice(0, 400) });
+  }
+  return out;
+}
+const FATAL = { not_granted: "Claude access was declined for this page. Allow it from the page's Permissions menu, then try again.",
+  sampling_disabled: "Claude isn't available for your account here, so decks can't be generated.",
+  not_declared: "This version of the page can't use Claude. Reload to get the latest version.",
+  capability_disabled: "Claude can't be reached from this view. Open the page in claude.ai or the Claude app.",
+  capability_removed: "Claude can't be reached from this view. Open the page in claude.ai or the Claude app.",
+  rate_limited: "You've reached your Claude usage limit for now. Questions made so far are saved; use Add questions later to finish.",
+  session_expired: "Your Claude session expired. Sign in again, then use Add questions to continue.",
+  refused: "Claude declined this focus. Try rewording it.",
+  needs_code: "This site needs an access code to generate decks. Enter the code below and try again.",
+  no_backend: "Deck generation isn't set up on this site yet. The study decks still work." };
+const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+async function startGeneration(form) {
+  const gen = await getGenerator();
+  const g = S.gen = { running: true, made: 0, target: form.count, note: "Thinking… the first batch takes up to a minute.", error: "", form: form.raw, deckId: form.extendId || null, ctl: new AbortController() };
+  updateGen();
+  if (!gen) { g.running = false; g.note = ""; g.error = "Deck generation needs this page open in claude.ai or the Claude app, signed in."; return updateGen(); }
+  let deck = form.extendId ? local.decks[form.extendId] : null;
+  const meta = deck ? { name: deck.name, focus: form.focus, level: form.level, style: form.style }
+    : { name: form.name, focus: form.focus, level: form.level, style: form.style };
+  const pending = deck ? null : { id: "u" + Date.now().toString(36), name: form.name, focus: form.focus, level: form.level, style: form.style, createdAt: Date.now(), color: COLORS[(Object.keys(local.decks).length + 3) % COLORS.length], questions: [] };
+  const seen = new Set((deck ? deck.questions : []).map((q) => norm(q.q)));
+  let round = 0, emptyRounds = 0;
+  try {
+    while (g.made < g.target && !g.ctl.signal.aborted) {
+      const target = deck || pending;
+      const remaining = g.target - g.made;
+      const sizes = []; let r = remaining; while (r > 0 && sizes.length < 2) { const s = Math.min(25, r); sizes.push(s); r -= s; }
+      const avoid = target.questions.map((q) => q.term).filter(Boolean).slice(-200);
+      const results = await Promise.allSettled(sizes.map((n, k) => gen.batch(meta, n, avoid, SLANTS[(round * 2 + k) % SLANTS.length], g.ctl.signal)));
+      round++;
+      let added = 0, fatal = null;
+      for (const res of results) {
+        if (res.status === "fulfilled") {
+          for (const it of cleanItems(res.value)) {
+            const key = norm(it.q);
+            if (seen.has(key) || g.made >= g.target) continue;
+            seen.add(key); it.id = "q" + target.questions.length; target.questions.push(it); g.made++; added++;
+          }
+        } else {
+          const code = res.reason && res.reason.code;
+          if (code === "cancelled") fatal = fatal || "cancelled";
+          else if (FATAL[code]) fatal = code;
+        }
+      }
+      if (added) { if (!deck) { deck = pending; g.deckId = deck.id; } saveDeck(deck); emptyRounds = 0; g.note = `Latest: “${deck.questions[deck.questions.length - 1].q}”`; }
+      else emptyRounds++;
+      updateGen();
+      if (fatal === "cancelled") break;
+      if (fatal) { g.error = FATAL[fatal]; break; }
+      if (emptyRounds >= 2) { g.error = "Claude's replies couldn't be turned into questions. Try a shorter or more specific focus."; break; }
+    }
+  } catch (e) { g.error = "Something went wrong talking to Claude. Questions made so far are saved."; }
+  g.running = false;
+  if (!g.error) g.note = g.made >= g.target ? `${g.made} questions added. Open the deck to start studying.` : g.made ? `Stopped after ${g.made} questions. They're saved in the deck.` : "Stopped before any questions were written.";
+  else if (g.made) g.note = `${g.made} questions were saved before this happened.`;
+  else g.note = "";
+  updateGen();
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
+  const { act, id } = b.dataset;
+  if (act === "home") return go("home", { confirmDelete: null });
+  if (act === "create") return go("create", { extendId: null, gen: S.gen && S.gen.running ? S.gen : null });
+  if (act === "extend") return go("create", { extendId: id, gen: S.gen && S.gen.running ? S.gen : null });
+  if (act === "play") { if (S.deckId !== id) { S.cur = null; S.recent = []; S.session = { n: 0, ok: 0 }; } return go("play", { deckId: id }); }
+  if (act === "piles") return go("piles", { deckId: id, pileTab: b.dataset.tab || "repeat" });
+  if (act === "tab") { S.pileTab = b.dataset.tab; return renderPiles(); }
+  if (act === "pick") return pick(Number(b.dataset.k));
+  if (act === "next") { S.cur = nextCard(getDeck(S.deckId)); return renderPlay(); }
+  if (act === "unlearn") { const p = prog(S.deckId)[b.dataset.q]; if (p) { p.l = false; p.s = 0; saveProgress(S.deckId); toast("Back in play"); } return renderPiles(); }
+  if (act === "del") { S.confirmDelete = id; return render(); }
+  if (act === "del-no") { S.confirmDelete = null; return render(); }
+  if (act === "del-yes") { removeDeck(id); S.confirmDelete = null; toast("Deck deleted"); return render(); }
+  if (act === "idea") { const f = $("#f-focus"); f.value = b.dataset.v; const n = $("#f-name"); if (n && !n.value) n.value = b.dataset.v.split(" ").slice(0, 3).join(" "); return; }
+  if (act === "stop") { if (S.gen && S.gen.ctl) S.gen.ctl.abort(); return; }
+});
+$("#home-btn").addEventListener("click", () => go("home", { confirmDelete: null }));
+document.addEventListener("submit", (e) => {
+  if (e.target.id !== "gen-form") return;
+  e.preventDefault();
+  if (S.gen && S.gen.running) return;
+  const codeEl = $("#f-code"); if (codeEl) saveCode(codeEl.value.trim());
+  const val = (id) => { const el = $("#" + id); return el ? el.value.trim() : ""; };
+  const count = Math.max(5, Math.min(500, Math.round(Number(val("f-count")) || 50)));
+  const raw = {}; ["f-name", "f-focus", "f-count", "f-level", "f-style"].forEach((k) => { const el = $("#" + k); if (el) raw[k] = el.value; });
+  startGeneration({ name: val("f-name") || "My deck", focus: val("f-focus"), level: val("f-level"), style: val("f-style"), count, extendId: S.extendId, raw });
+});
+document.addEventListener("keydown", (e) => {
+  if (S.view !== "play" || !S.cur || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName)) return;
+  if (S.cur.picked == null && /^[1-4]$/.test(e.key)) { e.preventDefault(); pick(Number(e.key) - 1); }
+  else if (S.cur.picked != null && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); S.cur = nextCard(getDeck(S.deckId)); renderPlay(); }
+});
+
+render();
+initCloud();
+getGenerator();
+</script>
+
+</body>
+</html>
