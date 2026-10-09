@@ -65,6 +65,26 @@ button { cursor: pointer; }
 .sync { font-size: .78rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
 .sync::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .sync.cloud::before { background: var(--good); }
+.top-right { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+#account { display: inline-flex; align-items: center; gap: 8px; font-size: .85rem; min-width: 0; }
+#account:empty { display: none; }
+#account .who { color: var(--muted); overflow-wrap: anywhere; }
+#account .btn { padding: 6px 12px; }
+.signin { border: 0; border-radius: 12px; padding: 0; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); width: min(400px, calc(100% - 32px)); }
+.signin::backdrop { background: rgba(13,21,32,.45); }
+.signin form { display: grid; gap: 14px; padding: 22px; }
+.signin h2 { font-size: 1.25rem; }
+.signin p { margin: 0; color: var(--muted); font-size: .88rem; }
+.signin .google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 10px 14px; }
+.signin .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .8rem; }
+.signin .or::before, .signin .or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.signin .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.signin .row .btn { flex: 1 1 140px; }
+.signin .linkish { background: none; border: 0; padding: 0; color: var(--accent); font-size: .85rem; justify-self: start; }
+.signin .msg { font-size: .85rem; border-radius: 8px; padding: 8px 10px; }
+.signin .msg.err { background: var(--bad-bg); color: var(--bad); }
+.signin .msg.ok { background: var(--good-bg); color: var(--good); }
+.signin .close { position: absolute; top: 10px; right: 10px; border: 0; background: none; font-size: 1.3rem; line-height: 1; padding: 6px; color: var(--muted); }
 
 /* Buttons */
 .btn { border: 1px solid var(--line); background: var(--surface); padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: .9rem; }
@@ -187,7 +207,7 @@ button.chip:hover { border-color: var(--accent); }
 <div class="wrap">
   <header class="top">
     <button class="brand" id="home-btn" type="button" aria-label="All decks"><h1>Boardroom <span>English</span></h1></button>
-    <span class="sync" id="sync">Saved in this browser</span>
+    <span class="top-right"><span class="sync" id="sync">Saved in this browser</span><span id="account"></span></span>
   </header>
   <main id="app"></main>
 </div>
@@ -293,9 +313,9 @@ function lsRead() { try { const v = JSON.parse(localStorage.getItem(LS_KEY)); if
 let lsTimer;
 function lsWrite() { clearTimeout(lsTimer); lsTimer = setTimeout(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(local)); } catch {} }, 150); }
 let local = lsRead();
-const cloud = { db: null, uid: null };
+const cloud = { db: null, path: null };
 const writing = {}, pending = {};
-function ref(docId) { return cloud.db.collection("data/users/" + cloud.uid).doc(docId); }
+function ref(docId) { return cloud.db.collection(cloud.path).doc(docId); }
 function queueWrite(docId, get) { if (!cloud.db) return; pending[docId] = get; if (!writing[docId]) flush(docId); }
 async function flush(docId) {
   writing[docId] = true;
@@ -320,6 +340,35 @@ function saveDeck(deck) { local.decks[deck.id] = deck; lsWrite(); queueWrite("de
 function removeDeck(id) { delete local.decks[id]; delete local.progress[id]; lsWrite(); queueWrite("deck-" + id, () => null); queueWrite("prog-" + id, () => null); }
 const answeredCount = (cards) => Object.values(cards || {}).reduce((n, p) => n + (p.c || 0) + (p.w || 0), 0);
 
+/* Load an account's store (a collection of deck-<id> / prog-<id> docs), merge this browser's decks into it, then keep it in sync. */
+async function attachStore(db, path, label) {
+  const snap = await db.collection(path).get();
+  cloud.db = db; cloud.path = path;
+  const merged = { decks: {}, progress: {} };
+  snap.docs.forEach((d) => {
+    const v = d.data();
+    if (d.id.startsWith("deck-") && v && Array.isArray(v.questions)) merged.decks[v.id] = v;
+    else if (d.id.startsWith("prog-") && v) merged.progress[d.id.slice(5)] = v.cards || {};
+  });
+  for (const id in local.decks) if (!merged.decks[id]) { merged.decks[id] = local.decks[id]; queueWrite("deck-" + id, () => local.decks[id] || null); }
+  for (const id in local.progress) {
+    if (answeredCount(local.progress[id]) > answeredCount(merged.progress[id])) { merged.progress[id] = local.progress[id]; queueWrite("prog-" + id, () => progBody(id)); }
+  }
+  local = merged; lsWrite();
+  const s = $("#sync"); s.textContent = label; s.classList.add("cloud");
+  refresh();
+}
+/* Signing out: stop syncing and clear this browser's copy so the next person on this device starts fresh. */
+function detachStore() {
+  cloud.db = null; cloud.path = null;
+  local = { decks: {}, progress: {} };
+  clearTimeout(lsTimer); try { localStorage.removeItem(LS_KEY); } catch {}
+  const s = $("#sync"); s.textContent = "Saved in this browser"; s.classList.remove("cloud");
+  if (S.view !== "home") go("home"); else refresh();
+}
+function refresh() { if (S.view !== "play" || (S.cur && S.cur.picked != null)) render(); else renderPlayHeader(); }
+window.boardroom = { attachStore, detachStore };
+
 async function initCloud() {
   if (!window.claude || !window.claude.use) return;
   try {
@@ -327,21 +376,7 @@ async function initCloud() {
     if (!db || !user) return;
     const uid = await user.id();
     if (!uid) return;
-    const snap = await db.collection("data/users/" + uid).get();
-    cloud.db = db; cloud.uid = uid;
-    const merged = { decks: {}, progress: {} };
-    snap.docs.forEach((d) => {
-      const v = d.data();
-      if (d.id.startsWith("deck-") && v && Array.isArray(v.questions)) merged.decks[v.id] = v;
-      else if (d.id.startsWith("prog-") && v) merged.progress[d.id.slice(5)] = v.cards || {};
-    });
-    for (const id in local.decks) if (!merged.decks[id]) { merged.decks[id] = local.decks[id]; queueWrite("deck-" + id, () => local.decks[id] || null); }
-    for (const id in local.progress) {
-      if (answeredCount(local.progress[id]) > answeredCount(merged.progress[id])) { merged.progress[id] = local.progress[id]; queueWrite("prog-" + id, () => progBody(id)); }
-    }
-    local = merged; lsWrite();
-    const s = $("#sync"); s.textContent = "Synced to your Claude account"; s.classList.add("cloud");
-    if (S.view !== "play" || (S.cur && S.cur.picked != null)) render(); else renderPlayHeader();
+    await attachStore(db, "data/users/" + uid, "Synced to your Claude account");
   } catch (e) { console.warn("Store unavailable, using this browser", e); }
 }
 
@@ -368,6 +403,7 @@ function getGenerator() {
         if (res.status === 429) throw { code: "rate_limited" };
         if (res.status === 404) throw { code: "no_backend" };
         if (res.status === 422) throw { code: "refused" };
+        if (res.status === 402) throw { code: "no_credit" };
         if (!res.ok) throw { code: "upstream_error" };
         return res.json();
       },
@@ -622,6 +658,7 @@ const FATAL = { not_granted: "Claude access was declined for this page. Allow it
   not_declared: "This version of the page can't use Claude. Reload to get the latest version.",
   capability_disabled: "Claude can't be reached from this view. Open the page in claude.ai or the Claude app.",
   capability_removed: "Claude can't be reached from this view. Open the page in claude.ai or the Claude app.",
+  no_credit: "The Anthropic API account behind this site is out of credit. Add credit at console.anthropic.com (Plans & Billing), then try again.",
   rate_limited: "You've reached your Claude usage limit for now. Questions made so far are saved; use Add questions later to finish.",
   session_expired: "Your Claude session expired. Sign in again, then use Add questions to continue.",
   refused: "Claude declined this focus. Try rewording it.",
@@ -648,7 +685,7 @@ async function startGeneration(form) {
       const avoid = target.questions.map((q) => q.term).filter(Boolean).slice(-200);
       const results = await Promise.allSettled(sizes.map((n, k) => gen.batch(meta, n, avoid, SLANTS[(round * 2 + k) % SLANTS.length], g.ctl.signal)));
       round++;
-      let added = 0, fatal = null;
+      let added = 0, fatal = null, failed = 0;
       for (const res of results) {
         if (res.status === "fulfilled") {
           for (const it of cleanItems(res.value)) {
@@ -657,16 +694,17 @@ async function startGeneration(form) {
             seen.add(key); it.id = "q" + target.questions.length; target.questions.push(it); g.made++; added++;
           }
         } else {
-          const code = res.reason && res.reason.code;
+          const code = res.reason && res.reason.code; failed++;
           if (code === "cancelled") fatal = fatal || "cancelled";
           else if (FATAL[code]) fatal = code;
         }
       }
       if (added) { if (!deck) { deck = pending; g.deckId = deck.id; } saveDeck(deck); emptyRounds = 0; g.note = `Latest: “${deck.questions[deck.questions.length - 1].q}”`; }
-      else emptyRounds++;
+      else { emptyRounds++; if (failed === results.length) g.serverErr = true; }
       updateGen();
       if (fatal === "cancelled") break;
       if (fatal) { g.error = FATAL[fatal]; break; }
+      if (emptyRounds >= 2 && g.serverErr) { g.error = "The deck generator ran into an error. Try again in a few minutes; if it keeps happening, the site's server logs will say why."; break; }
       if (emptyRounds >= 2) { g.error = "Claude's replies couldn't be turned into questions. Try a shorter or more specific focus."; break; }
     }
   } catch (e) { g.error = "Something went wrong talking to Claude. Questions made so far are saved."; }
@@ -719,5 +757,6 @@ initCloud();
 getGenerator();
 </script>
 
+<script type="module" src="/auth.js"></script>
 </body>
 </html>

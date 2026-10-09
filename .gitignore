@@ -4,3 +4,4 @@ functions/node_modules/
 *.log
 .env
 functions/.secret.local
+public/auth.js

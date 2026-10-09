@@ -56,6 +56,26 @@ button { cursor: pointer; }
 .sync { font-size: .78rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
 .sync::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .sync.cloud::before { background: var(--good); }
+.top-right { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+#account { display: inline-flex; align-items: center; gap: 8px; font-size: .85rem; min-width: 0; }
+#account:empty { display: none; }
+#account .who { color: var(--muted); overflow-wrap: anywhere; }
+#account .btn { padding: 6px 12px; }
+.signin { border: 0; border-radius: 12px; padding: 0; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); width: min(400px, calc(100% - 32px)); }
+.signin::backdrop { background: rgba(13,21,32,.45); }
+.signin form { display: grid; gap: 14px; padding: 22px; }
+.signin h2 { font-size: 1.25rem; }
+.signin p { margin: 0; color: var(--muted); font-size: .88rem; }
+.signin .google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 10px 14px; }
+.signin .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .8rem; }
+.signin .or::before, .signin .or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.signin .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.signin .row .btn { flex: 1 1 140px; }
+.signin .linkish { background: none; border: 0; padding: 0; color: var(--accent); font-size: .85rem; justify-self: start; }
+.signin .msg { font-size: .85rem; border-radius: 8px; padding: 8px 10px; }
+.signin .msg.err { background: var(--bad-bg); color: var(--bad); }
+.signin .msg.ok { background: var(--good-bg); color: var(--good); }
+.signin .close { position: absolute; top: 10px; right: 10px; border: 0; background: none; font-size: 1.3rem; line-height: 1; padding: 6px; color: var(--muted); }
 
 /* Buttons */
 .btn { border: 1px solid var(--line); background: var(--surface); padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: .9rem; }
@@ -178,7 +198,7 @@ button.chip:hover { border-color: var(--accent); }
 <div class="wrap">
   <header class="top">
     <button class="brand" id="home-btn" type="button" aria-label="All decks"><h1>Boardroom <span>English</span></h1></button>
-    <span class="sync" id="sync">Saved in this browser</span>
+    <span class="top-right"><span class="sync" id="sync">Saved in this browser</span><span id="account"></span></span>
   </header>
   <main id="app"></main>
 </div>
@@ -284,9 +304,9 @@ function lsRead() { try { const v = JSON.parse(localStorage.getItem(LS_KEY)); if
 let lsTimer;
 function lsWrite() { clearTimeout(lsTimer); lsTimer = setTimeout(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(local)); } catch {} }, 150); }
 let local = lsRead();
-const cloud = { db: null, uid: null };
+const cloud = { db: null, path: null };
 const writing = {}, pending = {};
-function ref(docId) { return cloud.db.collection("data/users/" + cloud.uid).doc(docId); }
+function ref(docId) { return cloud.db.collection(cloud.path).doc(docId); }
 function queueWrite(docId, get) { if (!cloud.db) return; pending[docId] = get; if (!writing[docId]) flush(docId); }
 async function flush(docId) {
   writing[docId] = true;
@@ -311,6 +331,35 @@ function saveDeck(deck) { local.decks[deck.id] = deck; lsWrite(); queueWrite("de
 function removeDeck(id) { delete local.decks[id]; delete local.progress[id]; lsWrite(); queueWrite("deck-" + id, () => null); queueWrite("prog-" + id, () => null); }
 const answeredCount = (cards) => Object.values(cards || {}).reduce((n, p) => n + (p.c || 0) + (p.w || 0), 0);
 
+/* Load an account's store (a collection of deck-<id> / prog-<id> docs), merge this browser's decks into it, then keep it in sync. */
+async function attachStore(db, path, label) {
+  const snap = await db.collection(path).get();
+  cloud.db = db; cloud.path = path;
+  const merged = { decks: {}, progress: {} };
+  snap.docs.forEach((d) => {
+    const v = d.data();
+    if (d.id.startsWith("deck-") && v && Array.isArray(v.questions)) merged.decks[v.id] = v;
+    else if (d.id.startsWith("prog-") && v) merged.progress[d.id.slice(5)] = v.cards || {};
+  });
+  for (const id in local.decks) if (!merged.decks[id]) { merged.decks[id] = local.decks[id]; queueWrite("deck-" + id, () => local.decks[id] || null); }
+  for (const id in local.progress) {
+    if (answeredCount(local.progress[id]) > answeredCount(merged.progress[id])) { merged.progress[id] = local.progress[id]; queueWrite("prog-" + id, () => progBody(id)); }
+  }
+  local = merged; lsWrite();
+  const s = $("#sync"); s.textContent = label; s.classList.add("cloud");
+  refresh();
+}
+/* Signing out: stop syncing and clear this browser's copy so the next person on this device starts fresh. */
+function detachStore() {
+  cloud.db = null; cloud.path = null;
+  local = { decks: {}, progress: {} };
+  clearTimeout(lsTimer); try { localStorage.removeItem(LS_KEY); } catch {}
+  const s = $("#sync"); s.textContent = "Saved in this browser"; s.classList.remove("cloud");
+  if (S.view !== "home") go("home"); else refresh();
+}
+function refresh() { if (S.view !== "play" || (S.cur && S.cur.picked != null)) render(); else renderPlayHeader(); }
+window.boardroom = { attachStore, detachStore };
+
 async function initCloud() {
   if (!window.claude || !window.claude.use) return;
   try {
@@ -318,21 +367,7 @@ async function initCloud() {
     if (!db || !user) return;
     const uid = await user.id();
     if (!uid) return;
-    const snap = await db.collection("data/users/" + uid).get();
-    cloud.db = db; cloud.uid = uid;
-    const merged = { decks: {}, progress: {} };
-    snap.docs.forEach((d) => {
-      const v = d.data();
-      if (d.id.startsWith("deck-") && v && Array.isArray(v.questions)) merged.decks[v.id] = v;
-      else if (d.id.startsWith("prog-") && v) merged.progress[d.id.slice(5)] = v.cards || {};
-    });
-    for (const id in local.decks) if (!merged.decks[id]) { merged.decks[id] = local.decks[id]; queueWrite("deck-" + id, () => local.decks[id] || null); }
-    for (const id in local.progress) {
-      if (answeredCount(local.progress[id]) > answeredCount(merged.progress[id])) { merged.progress[id] = local.progress[id]; queueWrite("prog-" + id, () => progBody(id)); }
-    }
-    local = merged; lsWrite();
-    const s = $("#sync"); s.textContent = "Synced to your Claude account"; s.classList.add("cloud");
-    if (S.view !== "play" || (S.cur && S.cur.picked != null)) render(); else renderPlayHeader();
+    await attachStore(db, "data/users/" + uid, "Synced to your Claude account");
   } catch (e) { console.warn("Store unavailable, using this browser", e); }
 }
 

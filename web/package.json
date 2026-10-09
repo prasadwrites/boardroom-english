@@ -1,0 +1,11 @@
+{
+  "name": "boardroom-english-web",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "firebase": "^13.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

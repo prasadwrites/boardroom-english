@@ -17,6 +17,8 @@ jobs:
           node-version: 22
       - run: npm ci
         working-directory: functions
+      - run: npm ci
+        working-directory: web
       - run: node scripts/build.mjs
       - name: Check Firebase credentials
         env:
@@ -33,6 +35,33 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: printf '%s' "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > "$RUNNER_TEMP/sa.json"
+      - name: Set up accounts (web app config, Firestore, email sign-in)
+        continue-on-error: true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+          PROJECT: ${{ vars.FIREBASE_PROJECT_ID || 'boardroom-english' }}
+        run: |
+          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
+          gcloud services enable firestore.googleapis.com identitytoolkit.googleapis.com --project "$PROJECT"
+          if gcloud firestore databases describe --database='(default)' --project "$PROJECT" >/dev/null 2>&1; then
+            echo "Firestore database already exists"
+          else
+            gcloud firestore databases create --database='(default)' --location=nam5 --project "$PROJECT"
+          fi
+          # The site reads its Firebase config from /__/firebase/init.json, which needs a registered web app.
+          if npx --yes firebase-tools@latest apps:list WEB --project "$PROJECT" --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.exit(JSON.parse(s).result.length?0:1))'; then
+            echo "Web app already registered"
+          else
+            npx --yes firebase-tools@latest apps:create WEB "Boardroom English" --project "$PROJECT" --non-interactive
+          fi
+          TOKEN=$(gcloud auth print-access-token)
+          curl -sS -X PATCH -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: $PROJECT" -H "Content-Type: application/json" \
+            "https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config?updateMask=signIn.email.enabled,signIn.email.passwordRequired" \
+            -d '{"signIn":{"email":{"enabled":true,"passwordRequired":true}}}' | head -c 600; echo
+      - name: Deploy Firestore rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: npx --yes firebase-tools@latest deploy --only firestore:rules --project "${{ vars.FIREBASE_PROJECT_ID || 'boardroom-english' }}" --non-interactive --force
       - name: Deploy hosting
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
