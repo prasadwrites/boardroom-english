@@ -41,12 +41,14 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
           PROJECT: ${{ vars.FIREBASE_PROJECT_ID || 'boardroom-english' }}
         run: |
+          set +e  # each setup step is independent; a failure in one shouldn't skip the others
           gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
           gcloud services enable firestore.googleapis.com identitytoolkit.googleapis.com --project "$PROJECT"
           if gcloud firestore databases describe --database='(default)' --project "$PROJECT" >/dev/null 2>&1; then
             echo "Firestore database already exists"
           else
-            gcloud firestore databases create --database='(default)' --location=nam5 --project "$PROJECT"
+            gcloud firestore databases create --database='(default)' --location=nam5 --project "$PROJECT" \
+              || echo "::warning::Couldn't create the Firestore database. Create it in the Firebase console: Build > Firestore Database > Create database."
           fi
           # The site reads its Firebase config from /__/firebase/init.json, which needs a registered web app.
           if npx --yes firebase-tools@latest apps:list WEB --project "$PROJECT" --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.exit(JSON.parse(s).result.length?0:1))'; then
@@ -59,6 +61,7 @@ jobs:
             "https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config?updateMask=signIn.email.enabled,signIn.email.passwordRequired" \
             -d '{"signIn":{"email":{"enabled":true,"passwordRequired":true}}}' | head -c 600; echo
       - name: Deploy Firestore rules
+        continue-on-error: true
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
         run: npx --yes firebase-tools@latest deploy --only firestore:rules --project "${{ vars.FIREBASE_PROJECT_ID || 'boardroom-english' }}" --non-interactive --force
