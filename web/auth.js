@@ -2,12 +2,14 @@
 // The page itself (src/app.html) exposes window.boardroom.attachStore / detachStore; this file only supplies the account and the store.
 import { initializeApp } from "firebase/app";
 import {
-  getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword,
+  getAuth, connectAuthEmulator, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword,
   createUserWithEmailAndPassword, sendPasswordResetEmail, signOut,
 } from "firebase/auth";
-import { initializeFirestore, collection, doc, getDocs, setDoc, deleteDoc } from "firebase/firestore";
+import { initializeFirestore, connectFirestoreEmulator, collection, doc, getDocs, setDoc, deleteDoc } from "firebase/firestore";
 
 const $ = (s, el = document) => el.querySelector(s);
+// `firebase emulators:start` serves the site on localhost; use the local Auth and Firestore emulators there.
+const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // Same collection/doc shape as the Claude artifact store, so the page's sync code works unchanged.
@@ -33,6 +35,7 @@ const MESSAGES = {
   "auth/popup-blocked": "Your browser blocked the Google window. Allow pop-ups for this site and try again.",
   "auth/operation-not-allowed": "This sign-in method isn't switched on for the site yet.",
   "auth/configuration-not-found": "Sign-in isn't set up for this site yet.",
+  "auth/user-disabled": "This account is suspended. Contact the site admin.",
 };
 const friendly = (e) => MESSAGES[e && e.code] || "Something went wrong signing in. Please try again.";
 
@@ -75,12 +78,39 @@ async function main() {
 
   const app = initializeApp(config);
   const auth = getAuth(app);
-  const store = storeFor(initializeFirestore(app, { ignoreUndefinedProperties: true }));
+  const fs = initializeFirestore(app, { ignoreUndefinedProperties: true });
+  if (LOCAL) { connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true }); connectFirestoreEmulator(fs, "127.0.0.1", 8080); }
+  const store = storeFor(fs);
   const dlg = buildDialog();
   const msg = $(".msg", dlg), email = $("#auth-email", dlg), pass = $("#auth-pass", dlg);
   const say = (text, ok) => { msg.hidden = !text; msg.textContent = text || ""; msg.className = "msg " + (ok ? "ok" : "err"); };
   const busy = (on) => dlg.querySelectorAll("button").forEach((b) => (b.disabled = on));
   let attachedUid = null;
+
+  // The account's plan and usage, from the server. The page uses it to show limits on the New deck form.
+  async function api(path, opts = {}) {
+    const user = auth.currentUser; if (!user) return null;
+    const res = await fetch("/api/account" + path, { ...opts, headers: { ...(opts.headers || {}), Authorization: "Bearer " + (await user.getIdToken()) } });
+    if (!res.ok) throw Object.assign(new Error("account api " + res.status), { status: res.status });
+    return res.json();
+  }
+  async function refreshAccount() {
+    try { const info = await api("/me"); if (info) { window.boardroom.setAccount(info); renderAccount(auth.currentUser, info); } }
+    catch (e) { console.warn("Couldn't load account details", e); }
+  }
+  function renderAccount(user, info) {
+    if (!user) { accountEl.innerHTML = `<button class="btn primary" type="button" data-auth="open">Sign in</button>`; return; }
+    accountEl.innerHTML = `${info && info.isAdmin ? `<a class="btn ghost" href="/admin.html">Admin</a>` : ""}`
+      + `<span class="who">${esc(user.email || user.displayName || "Signed in")}${info ? ` · ${esc(info.planLabel)}` : ""}</span>`
+      + `<button class="btn ghost" type="button" data-auth="signout">Sign out</button>`;
+  }
+  Object.assign(window.boardroom, {
+    getToken: () => (auth.currentUser ? auth.currentUser.getIdToken() : Promise.resolve(null)),
+    openSignIn: () => { say(""); dlg.showModal(); email.focus(); },
+    refreshAccount,
+    deleteDeck: (deckId) => api("/delete-deck", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deckId }) })
+      .then((info) => info && window.boardroom.setAccount(info)).catch((e) => console.warn("Couldn't free the deck on the server", e)),
+  });
 
   async function run(fn) {
     say(""); busy(true);
@@ -111,20 +141,22 @@ async function main() {
 
   accountEl.addEventListener("click", (e) => {
     const b = e.target.closest("[data-auth]"); if (!b) return;
-    if (b.dataset.auth === "open") { say(""); dlg.showModal(); email.focus(); }
+    if (b.dataset.auth === "open") window.boardroom.openSignIn();
     else if (b.dataset.auth === "signout") signOut(auth);
   });
 
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       if (dlg.open) dlg.close();
-      accountEl.innerHTML = `<span class="who">${esc(user.email || user.displayName || "Signed in")}</span><button class="btn ghost" type="button" data-auth="signout">Sign out</button>`;
+      renderAccount(user, null);
+      refreshAccount();
       if (attachedUid === user.uid) return;
       attachedUid = user.uid;
       try { await window.boardroom.attachStore(store, `users/${user.uid}/items`, "Saved to your account"); }
       catch (e) { console.warn("Couldn't load your account's decks", e); $("#sync").textContent = "Couldn't reach your account. Using this browser"; }
     } else {
-      accountEl.innerHTML = `<button class="btn primary" type="button" data-auth="open">Sign in</button>`;
+      renderAccount(null);
+      window.boardroom.setAccount(null);
       if (attachedUid) { attachedUid = null; window.boardroom.detachStore(); }
     }
   });

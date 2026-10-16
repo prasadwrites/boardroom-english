@@ -61,6 +61,7 @@ button { cursor: pointer; }
 #account:empty { display: none; }
 #account .who { color: var(--muted); overflow-wrap: anywhere; }
 #account .btn { padding: 6px 12px; }
+#account a.btn { color: inherit; text-decoration: none; }
 .signin { border: 0; border-radius: 12px; padding: 0; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); width: min(400px, calc(100% - 32px)); }
 .signin::backdrop { background: rgba(13,21,32,.45); }
 .signin form { display: grid; gap: 14px; padding: 22px; }
@@ -187,6 +188,10 @@ button.chip:hover { border-color: var(--accent); }
 .msg { padding: 10px 12px; border-radius: 8px; font-size: .9rem; }
 .msg.err { background: var(--bad-bg); color: var(--bad); }
 .msg.info { background: var(--rule); color: var(--muted); }
+.plan-msg { margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.plan-msg .btn { padding: 6px 12px; }
+.plan-line { margin: 0 0 16px; font-size: .88rem; color: var(--muted); }
+.plan-line strong { color: var(--ink); }
 
 #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 8px; font-size: .88rem; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
 @media (prefers-reduced-motion: no-preference) {
@@ -328,7 +333,7 @@ async function flush(docId) {
 const progBody = (id) => ({ deckId: id, cards: local.progress[id] || {}, updatedAt: Date.now() });
 function saveProgress(deckId) { lsWrite(); queueWrite("prog-" + deckId, () => progBody(deckId)); }
 function saveDeck(deck) { local.decks[deck.id] = deck; lsWrite(); queueWrite("deck-" + deck.id, () => local.decks[deck.id] || null); }
-function removeDeck(id) { delete local.decks[id]; delete local.progress[id]; lsWrite(); queueWrite("deck-" + id, () => null); queueWrite("prog-" + id, () => null); }
+function removeDeck(id) { if (window.boardroom.deleteDeck) window.boardroom.deleteDeck(id); delete local.decks[id]; delete local.progress[id]; lsWrite(); queueWrite("deck-" + id, () => null); queueWrite("prog-" + id, () => null); }
 const answeredCount = (cards) => Object.values(cards || {}).reduce((n, p) => n + (p.c || 0) + (p.w || 0), 0);
 
 /* Load an account's store (a collection of deck-<id> / prog-<id> docs), merge this browser's decks into it, then keep it in sync. */
@@ -358,7 +363,9 @@ function detachStore() {
   if (S.view !== "home") go("home"); else refresh();
 }
 function refresh() { if (S.view !== "play" || (S.cur && S.cur.picked != null)) render(); else renderPlayHeader(); }
-window.boardroom = { attachStore, detachStore };
+/* The site's sign-in script reports the account's plan and usage here (null when signed out). */
+function setAccount(info) { S.account = info; if (S.view === "create" && !(S.gen && S.gen.running)) renderCreate(); }
+window.boardroom = { attachStore, detachStore, setAccount };
 
 async function initCloud() {
   if (!window.claude || !window.claude.use) return;
@@ -385,12 +392,17 @@ function getGenerator() {
   } else {
     genPromise = Promise.resolve({
       batch: async (meta, n, avoid, slant, signal) => {
+        const token = window.boardroom.getToken ? await window.boardroom.getToken().catch(() => null) : null;
+        if (!token) throw { code: "signin_required" };
         let res;
         try {
-          res = await fetch("/api/generate", { method: "POST", signal, headers: { "Content-Type": "application/json" },
+          res = await fetch("/api/generate", { method: "POST", signal, headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
             body: JSON.stringify({ ...meta, n, avoid, slant, code: readCode() }) });
         } catch (e) { throw { code: signal.aborted ? "cancelled" : "upstream_error" }; }
-        if (res.status === 401) throw { code: "needs_code" };
+        if (res.status === 401 || res.status === 403) {
+          const err = await res.json().catch(() => ({}));
+          throw { code: err.error === "needs_code" || err.error === "suspended" || err.error === "limit_decks" || err.error === "limit_questions" ? err.error : "signin_required" };
+        }
         if (res.status === 429) throw { code: "rate_limited" };
         if (res.status === 404) throw { code: "no_backend" };
         if (res.status === 422) throw { code: "refused" };
@@ -404,7 +416,7 @@ function getGenerator() {
 }
 
 /* ---------- state ---------- */
-const S = { view: "home", deckId: null, cur: null, recent: [], session: { n: 0, ok: 0 }, pileTab: "repeat", confirmDelete: null, gen: null, extendId: null };
+const S = { account: null, view: "home", deckId: null, cur: null, recent: [], session: { n: 0, ok: 0 }, pileTab: "repeat", confirmDelete: null, gen: null, extendId: null };
 function allDecks() {
   const mine = Object.values(local.decks).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   return [...mine, ...BUILTINS];
@@ -565,13 +577,30 @@ function renderPiles() {
 
 /* Create / extend */
 const FOCUS_IDEAS = ["Negotiation phrases for closing a deal", "Small talk and networking at conferences", "Phrasal verbs used in office conversations", "Giving and receiving feedback as a manager", "Finance terms for budget meetings", "Presenting data and describing trends", "Handling customer complaints on the phone", "Diplomatic language for saying no"];
+/* On the website, deck creation follows the signed-in account's plan. Inside Claude there are no plan limits. */
+function planInfo(ext) {
+  if (IN_CLAUDE) return { ok: true, max: 500, html: "" };
+  const a = S.account;
+  if (!a) return { ok: false, max: 0, html: `<div class="msg info plan-msg">Sign in to create decks. Your decks are saved to your account. <button class="btn primary" type="button" data-act="signin">Sign in</button></div>` };
+  if (a.suspended) return { ok: false, max: 0, html: `<div class="msg err plan-msg">${esc(FATAL.suspended)}</div>` };
+  const used = ext ? Math.max(a.decks[ext.id] || 0, ext.questions.length) : 0;
+  const max = Math.max(0, a.maxQuestions - used);
+  const line = `<strong>${esc(a.planLabel)} plan:</strong> ${a.decksUsed} of ${a.maxDecks} decks used, up to ${a.maxQuestions} questions per deck.`;
+  if (!ext && a.decksUsed >= a.maxDecks) return { ok: false, max: 0, html: `<div class="msg err plan-msg">${line} ${esc(FATAL.limit_decks)}</div>` };
+  if (ext && max <= 0) return { ok: false, max: 0, html: `<div class="msg err plan-msg">${line} ${esc(FATAL.limit_questions)}</div>` };
+  return { ok: true, max, html: `<p class="plan-line">${line}${ext ? ` This deck can take ${max} more.` : ""}</p>` };
+}
 function renderCreate() {
   const ext = S.extendId ? getDeck(S.extendId) : null;
   const g = S.gen;
   const running = g && g.running;
+  const plan = planInfo(ext);
+  const maxQ = plan.max, minQ = Math.min(5, Math.max(1, maxQ)), defQ = Math.min(ext ? 50 : 100, maxQ || 100);
+  const showCode = !IN_CLAUDE && S.account && S.account.needsCode;
   $("#app").innerHTML = `
     <div class="bar-row"><div class="crumbs"><button class="link" data-act="home" ${running ? "disabled" : ""}>← Decks</button><h2>${ext ? "Add questions to " + esc(ext.name) : "New deck"}</h2></div></div>
     <div class="panel">
+      ${plan.html}
       <form class="form" id="gen-form">
         ${ext ? "" : `<div class="field"><label for="f-name">Deck name</label><input id="f-name" required maxlength="60" placeholder="e.g. Negotiation English"></div>`}
         <div class="field"><label for="f-focus">Focus</label>
@@ -579,14 +608,14 @@ function renderCreate() {
           ${ext ? "" : `<div class="chips-row">${FOCUS_IDEAS.map((f) => `<button type="button" class="chip-btn" data-act="idea" data-v="${esc(f)}">${esc(f)}</button>`).join("")}</div>`}
         </div>
         <div class="row3">
-          <div class="field"><label for="f-count">Questions</label><input id="f-count" type="number" min="5" max="500" step="5" value="${ext ? 50 : 100}" required><span class="help">5 to 500. Larger decks take a few minutes.</span></div>
+          <div class="field"><label for="f-count">Questions</label><input id="f-count" type="number" min="${minQ}" max="${maxQ || 500}" step="1" value="${defQ}" required><span class="help">${maxQ ? `${minQ} to ${maxQ}.` : ""} Larger decks take a few minutes.</span></div>
           <div class="field"><label for="f-level">Level</label><select id="f-level">${["B1", "B2", "C1", "C2"].map((l) => `<option ${l === (ext?.level || "B2") ? "selected" : ""}>${l}</option>`).join("")}</select></div>
           <div class="field"><label for="f-style">Question type</label><select id="f-style">
             ${["Mixed", "What does it mean?", "Best thing to say in a situation", "Fill in the blank", "Most formal or natural option"].map((s) => `<option ${s === (ext?.style || "Mixed") ? "selected" : ""}>${s}</option>`).join("")}</select></div>
         </div>
-        ${IN_CLAUDE ? "" : `<div class="field"><label for="f-code">Access code</label><input id="f-code" type="password" autocomplete="off" value="${esc(readCode())}"><span class="help">Only needed if the site owner set one.</span></div>`}
+        ${showCode ? `<div class="field"><label for="f-code">Access code</label><input id="f-code" type="password" autocomplete="off" value="${esc(readCode())}"><span class="help">Your account needs the access code the site admin gave you.</span></div>` : ""}
         <div class="next-row"><span class="hint">${IN_CLAUDE ? "Claude writes the questions using your Claude account." : "Claude writes the questions for you."}</span>
-          <button class="btn primary" type="submit" id="gen-btn" ${running ? "disabled" : ""}>${ext ? "Add questions" : "Create deck"}</button></div>
+          <button class="btn primary" type="submit" id="gen-btn" ${running || !plan.ok ? "disabled" : ""}>${ext ? "Add questions" : "Create deck"}</button></div>
       </form>
       <div id="gen-area">${genHTML()}</div>
     </div>`;
@@ -605,7 +634,7 @@ function genHTML() {
       : deck && deck.questions.length ? `<span></span><button class="btn primary" data-act="play" data-id="${deck.id}">Study ${esc(deck.name)}</button>` : ""}</div>
   </div>`;
 }
-function updateGen() { const a = $("#gen-area"); if (S.view === "create" && a) a.innerHTML = genHTML(); const b = $("#gen-btn"); if (b) b.disabled = !!(S.gen && S.gen.running); }
+function updateGen() { const a = $("#gen-area"); if (S.view === "create" && a) a.innerHTML = genHTML(); const b = $("#gen-btn"); if (b) b.disabled = !!(S.gen && S.gen.running) || !planInfo(S.extendId ? getDeck(S.extendId) : null).ok; }
 
 const SLANTS = ["meetings and presentations", "phone and video calls", "emails and written follow-ups", "negotiation and sales", "feedback and managing people", "small talk and networking", "finance, budgets and numbers", "projects, deadlines and planning", "customer and client conversations", "strategy and decision-making"];
 function buildPrompt({ name, focus, level, style }, n, avoid, slant) {
@@ -653,7 +682,11 @@ const FATAL = { not_granted: "Claude access was declined for this page. Allow it
   rate_limited: "You've reached your Claude usage limit for now. Questions made so far are saved; use Add questions later to finish.",
   session_expired: "Your Claude session expired. Sign in again, then use Add questions to continue.",
   refused: "Claude declined this focus. Try rewording it.",
-  needs_code: "This site needs an access code to generate decks. Enter the code below and try again.",
+  needs_code: "Your account needs an access code to create decks. Enter the code you were given below and try again.",
+  signin_required: "Sign in to create decks. Your decks are then saved to your account.",
+  suspended: "Your account is suspended, so you can't create decks. Contact the site admin.",
+  limit_decks: "You've used all the decks on your plan. Delete a deck or ask the admin to upgrade your plan.",
+  limit_questions: "This deck has reached the most questions your plan allows. Ask the admin to upgrade your plan for bigger decks.",
   no_backend: "Deck generation isn't set up on this site yet. The study decks still work." };
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -666,6 +699,7 @@ async function startGeneration(form) {
   const meta = deck ? { name: deck.name, focus: form.focus, level: form.level, style: form.style }
     : { name: form.name, focus: form.focus, level: form.level, style: form.style };
   const pending = deck ? null : { id: "u" + Date.now().toString(36), name: form.name, focus: form.focus, level: form.level, style: form.style, createdAt: Date.now(), color: COLORS[(Object.keys(local.decks).length + 3) % COLORS.length], questions: [] };
+  meta.deckId = (deck || pending).id;
   const seen = new Set((deck ? deck.questions : []).map((q) => norm(q.q)));
   let round = 0, emptyRounds = 0;
   try {
@@ -704,6 +738,7 @@ async function startGeneration(form) {
   else if (g.made) g.note = `${g.made} questions were saved before this happened.`;
   else g.note = "";
   updateGen();
+  if (window.boardroom.refreshAccount) window.boardroom.refreshAccount();
 }
 
 /* ---------- events ---------- */
@@ -722,6 +757,7 @@ document.addEventListener("click", (e) => {
   if (act === "del") { S.confirmDelete = id; return render(); }
   if (act === "del-no") { S.confirmDelete = null; return render(); }
   if (act === "del-yes") { removeDeck(id); S.confirmDelete = null; toast("Deck deleted"); return render(); }
+  if (act === "signin") { if (window.boardroom.openSignIn) window.boardroom.openSignIn(); return; }
   if (act === "idea") { const f = $("#f-focus"); f.value = b.dataset.v; const n = $("#f-name"); if (n && !n.value) n.value = b.dataset.v.split(" ").slice(0, 3).join(" "); return; }
   if (act === "stop") { if (S.gen && S.gen.ctl) S.gen.ctl.abort(); return; }
 });
@@ -732,7 +768,9 @@ document.addEventListener("submit", (e) => {
   if (S.gen && S.gen.running) return;
   const codeEl = $("#f-code"); if (codeEl) saveCode(codeEl.value.trim());
   const val = (id) => { const el = $("#" + id); return el ? el.value.trim() : ""; };
-  const count = Math.max(5, Math.min(500, Math.round(Number(val("f-count")) || 50)));
+  const plan = planInfo(S.extendId ? getDeck(S.extendId) : null);
+  if (!plan.ok) return;
+  const count = Math.max(1, Math.min(plan.max, Math.round(Number(val("f-count")) || 50)));
   const raw = {}; ["f-name", "f-focus", "f-count", "f-level", "f-style"].forEach((k) => { const el = $("#" + k); if (el) raw[k] = el.value; });
   startGeneration({ name: val("f-name") || "My deck", focus: val("f-focus"), level: val("f-level"), style: val("f-style"), count, extendId: S.extendId, raw });
 });

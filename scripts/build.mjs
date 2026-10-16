@@ -1,5 +1,5 @@
 // Wraps src/app.html (the page body, also published as a Claude artifact) into a full document for Firebase Hosting,
-// and bundles web/auth.js (sign-in and Firestore sync, web only) into public/auth.js.
+// bundles web/auth.js (sign-in and Firestore sync, web only) and web/admin.js, and builds the admin page.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { build } from "../web/node_modules/esbuild/lib/main.js";
 
@@ -20,9 +20,16 @@ ${body}
 `;
 mkdirSync(new URL("../public/", import.meta.url), { recursive: true });
 writeFileSync(new URL("../public/index.html", import.meta.url), html);
-await build({
-  entryPoints: [new URL("../web/auth.js", import.meta.url).pathname],
-  outfile: new URL("../public/auth.js", import.meta.url).pathname,
-  bundle: true, format: "esm", minify: true, target: "es2020", legalComments: "none",
-});
-console.log("Built public/index.html and public/auth.js");
+// The admin page shares the app's colour tokens and base styles (everything before "/* Top bar */" in app.html).
+const tokens = body.slice(body.indexOf(":root {"), body.indexOf("/* Top bar */"));
+const admin = readFileSync(new URL("../web/admin.html", import.meta.url), "utf8").replace("/*TOKENS*/", tokens);
+writeFileSync(new URL("../public/admin.html", import.meta.url), admin);
+
+for (const name of ["auth", "admin"]) {
+  await build({
+    entryPoints: [new URL(`../web/${name}.js`, import.meta.url).pathname],
+    outfile: new URL(`../public/${name}.js`, import.meta.url).pathname,
+    bundle: true, format: "esm", minify: true, target: "es2020", legalComments: "none",
+  });
+}
+console.log("Built public/index.html, public/admin.html, public/auth.js and public/admin.js");

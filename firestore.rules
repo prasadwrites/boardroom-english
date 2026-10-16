@@ -1,9 +1,19 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each signed-in person can read and write only their own decks and piles.
+    function signedInAs(uid) { return request.auth != null && request.auth.uid == uid; }
+    function suspended(uid) {
+      let acct = /databases/$(database)/documents/accounts/$(uid);
+      return exists(acct) && get(acct).data.suspended == true;
+    }
+    // Each signed-in person can read and write only their own decks and piles, unless their account is suspended.
     match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if signedInAs(uid) && !suspended(uid);
+    }
+    // Plan, limits and usage. Only the server (deck generator and admin page) writes these.
+    match /accounts/{uid} {
+      allow read: if signedInAs(uid);
+      allow write: if false;
     }
   }
 }

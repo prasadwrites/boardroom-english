@@ -15,6 +15,13 @@
           "functionId": "generate",
           "region": "us-central1"
         }
+      },
+      {
+        "source": "/api/account/**",
+        "function": {
+          "functionId": "account",
+          "region": "us-central1"
+        }
       }
     ],
     "headers": [
@@ -35,6 +42,24 @@
             "value": "no-cache"
           }
         ]
+      },
+      {
+        "source": "/admin.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "/admin.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       }
     ]
   },
@@ -47,5 +72,27 @@
   ],
   "firestore": {
     "rules": "firestore.rules"
+  },
+  "emulators": {
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9099
+    },
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8080
+    },
+    "functions": {
+      "host": "127.0.0.1",
+      "port": 5001
+    },
+    "hosting": {
+      "host": "127.0.0.1",
+      "port": 5000
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true
   }
 }

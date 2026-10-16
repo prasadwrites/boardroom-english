@@ -15,12 +15,28 @@ Starter decks: Business Phrases, Core Vocabulary, Meetings & Calls.
 | `src/app.html` | The whole app (HTML, CSS, JS). The same file is also published as a Claude artifact. |
 | `scripts/build.mjs` | Wraps `src/app.html` into `public/index.html` for Firebase Hosting and bundles `web/auth.js` into `public/auth.js`. |
 | `web/auth.js` | Web-only sign-in (Google or email and password, via Firebase Authentication) and Firestore sync of each user's decks and piles. |
-| `firestore.rules` | Lets each signed-in user read and write only `users/<their uid>/…`. |
+| `functions/accounts.js` | Plans, per-account access codes, suspension, the deck/question ledger and the admin actions. |
+| `web/admin.html`, `web/admin.js` | The admin page (`/admin.html`), only usable by the admin account. |
+| `firestore.rules` | Lets each signed-in user read and write only `users/<their uid>/…` (blocked while suspended) and read their own `accounts/<uid>`. |
 | `functions/index.js` | `POST /api/generate`: a Cloud Function that asks Claude (`claude-opus-5-5`) for a batch of up to 25 questions. |
 | `firebase.json` | Hosting config and the `/api/generate` rewrite. |
 | `.github/workflows/deploy.yml` | Deploys hosting and functions on every push to `main`. |
 
 On the web, signed-out visitors keep their decks and progress in the browser's localStorage. After signing in, everything is saved to their account in Firestore (`users/<uid>/items`, docs `deck-<id>` and `prog-<id>`), and decks made before signing in are copied into the account. Signing out clears the browser's copy. When the app runs as a Claude artifact, it uses the viewer's Claude account instead, and does not need the function.
+
+## Accounts and plans
+
+Creating decks on the website needs a signed-in account. Each account has a plan, enforced by the server on every `/api/generate` call:
+
+| Plan | Decks | Questions per deck |
+| --- | --- | --- |
+| Free (default) | 5 | 20 |
+| Pro | 50 | 120 |
+| Pro Max | 100 | 200 |
+
+The admin (`prasad.writes@gmail.com`, signed in with a verified email such as Google sign-in) gets an **Admin** link that opens `/admin.html`. There they can see every account with its usage, change its plan, give it its own access code (required for creating decks when set), and suspend or restore it. Suspending disables sign-in, blocks deck creation and blocks access to the account's saved decks. Deleting a deck frees its slot. The admin account starts on Pro Max.
+
+Local testing: `firebase emulators:start --project demo-boardroom` runs Auth, Firestore, Functions and Hosting locally; the site uses the emulators automatically on localhost.
 
 ## Deploying to Firebase
 
