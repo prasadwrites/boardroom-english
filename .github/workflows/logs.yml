@@ -15,9 +15,21 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
         run: |
           gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
-          gcloud logging read 'resource.type="cloud_run_revision" AND (resource.labels.service_name="generate" OR resource.labels.service_name="account") AND (severity>=WARNING OR httpRequest.status>=400)' \
+          gcloud logging read 'resource.type="cloud_run_revision" AND (resource.labels.service_name="generate" OR resource.labels.service_name="account") AND (severity>=WARNING OR httpRequest.status>=400 OR resource.labels.service_name="account")' \
             --project boardroom-english --freshness=1d --limit 40 \
             --format='table(timestamp, resource.labels.service_name, severity, httpRequest.status, httpRequest.requestUrl, httpRequest.latency, textPayload, jsonPayload.message)'
+      - name: Check the admin account's sign-in record
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          TOKEN=$(gcloud auth print-access-token)
+          curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: boardroom-english" -H "Content-Type: application/json" \
+            "https://identitytoolkit.googleapis.com/v1/projects/boardroom-english/accounts:lookup" -d '{"email":["prasad.writes@gmail.com"]}' \
+            | jq '[.users[]? | {emailVerified, disabled, providers: [.providerUserInfo[]?.providerId], lastLoginAt}]'
+          curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            "https://firestore.googleapis.com/v1/projects/boardroom-english/databases/(default)/documents:runQuery" \
+            -d '{"structuredQuery":{"from":[{"collectionId":"accounts"}],"where":{"fieldFilter":{"field":{"fieldPath":"email"},"op":"EQUAL","value":{"stringValue":"prasad.writes@gmail.com"}}}}}' \
+            | jq '[.[] | .document.fields | select(.) | {plan: .plan.stringValue, suspended: .suspended.booleanValue}]'
       - name: Remove credentials
         if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"
