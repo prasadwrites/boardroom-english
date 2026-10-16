@@ -9,6 +9,7 @@ import { initializeFirestore, connectFirestoreEmulator, collection, doc, getDocs
 
 const $ = (s, el = document) => el.querySelector(s);
 // `firebase emulators:start` serves the site on localhost; use the local Auth and Firestore emulators there.
+const ADMIN_EMAIL = "prasad.writes@gmail.com";
 const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -100,7 +101,9 @@ async function main() {
   }
   function renderAccount(user, info) {
     if (!user) { accountEl.innerHTML = `<button class="btn primary" type="button" data-auth="open">Sign in</button>`; return; }
-    accountEl.innerHTML = `${info && info.isAdmin ? `<a class="btn ghost" href="/admin.html">Admin</a>` : ""}`
+    // Show the Admin link straight away for the admin's verified address; the server still checks every admin request.
+    const admin = (info && info.isAdmin) || (user.email === ADMIN_EMAIL && user.emailVerified);
+    accountEl.innerHTML = `${admin ? `<a class="btn" href="/admin.html">Admin</a>` : ""}`
       + `<span class="who">${esc(user.email || user.displayName || "Signed in")}${info ? ` · ${esc(info.planLabel)}` : ""}</span>`
       + `<button class="btn ghost" type="button" data-auth="signout">Sign out</button>`;
   }
