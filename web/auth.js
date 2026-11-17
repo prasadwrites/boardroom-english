@@ -5,7 +5,7 @@ import {
   getAuth, connectAuthEmulator, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword,
   createUserWithEmailAndPassword, sendPasswordResetEmail, signOut,
 } from "firebase/auth";
-import { initializeFirestore, connectFirestoreEmulator, collection, doc, getDocs, setDoc, deleteDoc } from "firebase/firestore";
+import { initializeFirestore, connectFirestoreEmulator, collection, doc, getDocs, setDoc, deleteDoc, query, where } from "firebase/firestore";
 
 const $ = (s, el = document) => el.querySelector(s);
 // `firebase emulators:start` serves the site on localhost; use the local Auth and Firestore emulators there.
@@ -107,6 +107,16 @@ async function main() {
       + `<span class="who">${esc(user.email || user.displayName || "Signed in")}${info ? ` · ${esc(info.planLabel)}` : ""}</span>`
       + `<button class="btn ghost" type="button" data-auth="signout">Sign out</button>`;
   }
+  // Decks the admin made public or assigned to this account.
+  async function loadShared(user) {
+    try {
+      const col = collection(fs, "shared");
+      const [pub, mine] = await Promise.all([getDocs(query(col, where("public", "==", true))), getDocs(query(col, where("assignees", "array-contains", user.uid)))]);
+      const all = {};
+      [...pub.docs, ...mine.docs].forEach((d) => (all[d.id] = { sid: d.id, ...d.data() }));
+      if (auth.currentUser && auth.currentUser.uid === user.uid) window.boardroom.setShared(Object.values(all));
+    } catch (e) { console.warn("Couldn't load shared decks", e); }
+  }
   Object.assign(window.boardroom, {
     getToken: () => (auth.currentUser ? auth.currentUser.getIdToken() : Promise.resolve(null)),
     openSignIn: () => { say(""); dlg.showModal(); email.focus(); },
@@ -157,9 +167,11 @@ async function main() {
       attachedUid = user.uid;
       try { await window.boardroom.attachStore(store, `users/${user.uid}/items`, "Saved to your account"); }
       catch (e) { console.warn("Couldn't load your account's decks", e); $("#sync").textContent = "Couldn't reach your account. Using this browser"; }
+      loadShared(user);
     } else {
       renderAccount(null);
       window.boardroom.setAccount(null);
+      window.boardroom.setShared([]);
       if (attachedUid) { attachedUid = null; window.boardroom.detachStore(); }
     }
   });

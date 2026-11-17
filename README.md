@@ -38,6 +38,13 @@ The admin (`prasad.writes@gmail.com`, signed in with a verified email such as Go
 
 Local testing: `firebase emulators:start --project demo-boardroom` runs Auth, Firestore, Functions and Hosting locally; the site uses the emulators automatically on localhost.
 
+## Swipe decks, sharing and industries
+
+- **Swipe decks** teach words, phrases and idioms. The front asks for the closest meaning (multiple choice) or shows the meaning and a few letters to type the word; the card turns green or red. Tapping flips it to the meaning, an example and a picture. Swipe left (or ←) to put it in Learned, right (or →) for Repeat; the piles can move a card to the other pile.
+- **Pictures** are drawn by Gemini image on Vertex AI (`functions/images.js`) with the functions' runtime service account, one per card, only for cards inside the account's plan. They're stored as small WebP files in Firestore `images/` and served from `/api/img/...`. The deploy workflow enables `aiplatform.googleapis.com`.
+- **Industry**: both deck types take an industry, which goes into Claude's prompt and shows on the deck.
+- **Sharing**: on the admin page's Decks tab the admin can make any deck public or assign it to accounts. A read-only copy goes to `shared/{ownerUid~deckId}`; saving again refreshes it. On the Accounts tab the admin can set each account's default deck (a starter deck or any deck), which is pinned first and opens once per session.
+
 ## Deploying to Firebase
 
 1. Create a Firebase project and upgrade it to the **Blaze** plan (Cloud Functions need it). Put its project ID in `.firebaserc`, or set the `FIREBASE_PROJECT_ID` repository variable.

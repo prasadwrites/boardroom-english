@@ -15,7 +15,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
         run: |
           gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
-          gcloud logging read 'resource.type="cloud_run_revision" AND (resource.labels.service_name="generate" OR resource.labels.service_name="account") AND (severity>=WARNING OR httpRequest.status>=400 OR resource.labels.service_name="account")' \
+          gcloud logging read 'resource.type="cloud_run_revision" AND (resource.labels.service_name="generate" OR resource.labels.service_name="account" OR resource.labels.service_name="image") AND (severity>=WARNING OR httpRequest.status>=400 OR resource.labels.service_name="account")' \
             --project boardroom-english --freshness=1d --limit 40 \
             --format='table(timestamp, resource.labels.service_name, severity, httpRequest.status, httpRequest.requestUrl, httpRequest.latency, textPayload, jsonPayload.message)'
       - name: Check the admin account's sign-in record
@@ -30,26 +30,6 @@ jobs:
             "https://firestore.googleapis.com/v1/projects/boardroom-english/databases/(default)/documents:runQuery" \
             -d '{"structuredQuery":{"from":[{"collectionId":"accounts"}],"where":{"fieldFilter":{"field":{"fieldPath":"email"},"op":"EQUAL","value":{"stringValue":"prasad.writes@gmail.com"}}}}}' \
             | jq '[.[] | .document.fields | select(.) | {plan: .plan.stringValue, suspended: .suspended.booleanValue}]'
-      - name: Check picture generation (Vertex AI)
-        continue-on-error: true
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
-        run: |
-          set +e
-          gcloud services enable aiplatform.googleapis.com --project boardroom-english
-          TOKEN=$(gcloud auth print-access-token)
-          BASE=https://us-central1-aiplatform.googleapis.com/v1/projects/boardroom-english/locations/us-central1/publishers/google/models
-          for M in imagen-4.0-fast-generate-001 imagen-4.0-generate-001 imagen-3.0-fast-generate-001 imagen-3.0-generate-002; do
-            curl -sS -o out.json -w "$M HTTP %{http_code} in %{time_total}s\n" -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-              "$BASE/$M:predict" -d '{"instances":[{"prompt":"A friendly cartoon owl reading a business report, charming 3D animated movie style, soft rounded shapes, warm cinematic lighting, no text"}],"parameters":{"sampleCount":1,"aspectRatio":"1:1"}}'
-            jq -c '{images: [.predictions[]? | (.bytesBase64Encoded | length)], mime: [.predictions[]?.mimeType], error: .error.message}' out.json
-          done
-          for M in gemini-2.5-flash-image; do
-            curl -sS -o out.json -w "$M HTTP %{http_code} in %{time_total}s\n" -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-              "$BASE/$M:generateContent" -d '{"contents":[{"role":"user","parts":[{"text":"A friendly cartoon owl reading a business report, charming 3D animated movie style, no text"}]}],"generationConfig":{"responseModalities":["IMAGE"]}}'
-            jq -c '{images: [.candidates[]?.content.parts[]? | select(.inlineData) | (.inlineData.data | length)], error: .error.message}' out.json
-          done
-          rm -f out.json
       - name: Remove credentials
         if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"
