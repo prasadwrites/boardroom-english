@@ -723,8 +723,12 @@ function counts(deck) {
 }
 /* Every screen change is a browser history entry, so Back and Forward move between decks, play and piles. */
 const navState = () => ({ bre: 1, view: S.view, deckId: S.deckId, pileTab: S.pileTab, extendId: S.extendId });
+/* Phones open every deck in full-screen play; the × still returns to normal until the next deck is opened. */
+const phone = () => !IN_CLAUDE && matchMedia("(max-width: 560px)").matches;
 function go(view, extra = {}, fromHistory) {
+  const enteringPlay = view === "play" && (S.view !== "play" || (extra.deckId && extra.deckId !== S.deckId));
   Object.assign(S, { view }, extra); render(); window.scrollTo({ top: 0 }); animateIn();
+  if (enteringPlay && phone() && !(S.gate && anon())) setFocus(true);
   if (fromHistory) return;
   const st = navState(), was = history.state || {};
   if (was.view === st.view && was.deckId === st.deckId && was.pileTab === st.pileTab && was.extendId === st.extendId) return;
@@ -781,6 +785,11 @@ function setFocus(on) {
   window.scrollTo({ top: 0 });
 }
 const inFocus = () => document.body.classList.contains("focus");
+document.addEventListener("pointerup", (e) => {
+  if (!inFocus() || e.target.closest("#fs-exit") || document.fullscreenElement || document.webkitFullscreenElement) return;
+  const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+  try { const r = req && req.call(el, { navigationUI: "hide" }); if (r && r.catch) r.catch(() => {}); } catch {}
+}, true);
 ["fullscreenchange", "webkitfullscreenchange"].forEach((ev) => document.addEventListener(ev, () => {
   if (!(document.fullscreenElement || document.webkitFullscreenElement) && inFocus()) setFocus(false);
 }));
