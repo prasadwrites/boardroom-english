@@ -14,7 +14,7 @@ let toastTimer;
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2600); }
 const when = (s) => { if (!s) return "never"; const d = new Date(s); return isNaN(d) ? "never" : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); };
 
-let auth, me, users = [], decks = [], filter = "", planFilter = "all", tab = "accounts", deckFilter = "", deckFormat = "all", deckIndustry = "all";
+let auth, me, users = [], decks = [], filter = "", planFilter = "all", tab = location.hash === "#decks" ? "decks" : "accounts", deckFilter = "", deckFormat = "all", deckIndustry = "all";
 const emailOf = (uid) => (users.find((u) => u.uid === uid) || {}).email || "unknown account";
 
 async function api(path, body) {
@@ -36,6 +36,9 @@ function tabs() {
     <button class="tab" role="tab" aria-selected="${tab === "decks"}" data-tab="decks">Decks (${decks.length})</button></div>`;
 }
 function render() { if (tab === "decks") renderDecks(); else renderAccounts(); }
+// Switching tabs adds a history entry (#decks), so the browser's Back button returns to the other tab and then to the app.
+function show(t) { tab = t; render(); const m = $("#main"); m.classList.remove("enter"); void m.offsetWidth; m.classList.add("enter"); }
+addEventListener("hashchange", () => { if (users.length) show(location.hash === "#decks" ? "decks" : "accounts"); });
 function renderAccounts() {
   const q = filter.toLowerCase();
   const shown = users.filter((u) => (planFilter === "all" || (planFilter === "suspended" ? u.suspended : u.plan === planFilter))
@@ -83,7 +86,7 @@ function renderDecks() {
 function deckCard(d) {
   const stale = d.shared && d.sharedCards !== d.cards;
   const who = users.filter((u) => u.uid !== d.ownerUid);
-  return `<article class="acct deck-row" data-sid="${esc(d.sid)}">
+  return `<article class="acct deck-row" data-sid="${esc(d.sid)}" style="--i:${decks.indexOf(d) + 2}">
     <div class="id">
       <div class="email">${esc(d.name)}<span class="badge ${d.format === "swipe" ? "swipe" : "admin"}">${d.format === "swipe" ? "Swipe" : "Quiz"}</span>${d.public ? `<span class="badge pub">Public</span>` : ""}</div>
       <div class="meta">${esc(emailOf(d.ownerUid))} · ${d.cards} cards${d.level ? " · " + esc(d.level) : ""} · ${esc(d.industry || "General")}</div>
@@ -112,7 +115,7 @@ function defaultOptions(u) {
 function card(u) {
   const [maxD, maxQ] = LIMITS[u.plan] || LIMITS.free;
   const self = u.uid === me.uid;
-  return `<article class="acct ${u.suspended ? "off" : ""}" data-uid="${esc(u.uid)}">
+  return `<article class="acct ${u.suspended ? "off" : ""}" data-uid="${esc(u.uid)}" style="--i:${users.indexOf(u) + 2}">
     <div class="id">
       <div class="email">${esc(u.email || "(no email)")}${u.isAdmin ? `<span class="badge admin">Admin</span>` : ""}${u.suspended ? `<span class="badge off">Suspended</span>` : ""}</div>
       <div class="meta">${u.name ? esc(u.name) + " · " : ""}${esc(u.providers.join(", ") || "")} · joined ${when(u.created)} · last seen ${when(u.lastSignIn)}</div>
@@ -156,7 +159,7 @@ document.addEventListener("change", (e) => {
   else update(uid, { defaultDeck: e.target.value }, e.target.value ? "Default deck set" : "Default deck removed");
 });
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-tab]"); if (t) { tab = t.dataset.tab; return render(); }
+  const t = e.target.closest("[data-tab]"); if (t) { if (t.dataset.tab !== tab) location.hash = t.dataset.tab === "decks" ? "decks" : ""; return; }
   const b = e.target.closest("button[data-do]"); if (!b) return;
   if (b.dataset.do === "share") { b.disabled = true; return share(b.closest("[data-sid]")); }
   const row = b.closest("[data-uid]"); const uid = row.dataset.uid; const u = users.find((x) => x.uid === uid);
@@ -178,7 +181,7 @@ async function main() {
     me = user;
     $("#who").textContent = user ? user.email || "" : "";
     if (!user) return notice(`<p>Sign in with the admin account on the main page first.</p><a class="btn primary" href="/">Go to Boardroom English</a>`);
-    try { [users, decks] = await Promise.all([api("/users").then((r) => r.users), api("/decks").then((r) => r.decks)]); render(); }
+    try { [users, decks] = await Promise.all([api("/users").then((r) => r.users), api("/decks").then((r) => r.decks)]); show(tab); }
     catch (e) {
       if (e.status === 403) notice(`<p>This page is only for the site admin.</p><a class="btn" href="/">Back to the decks</a>`);
       else notice(`<p>Couldn't load the accounts. Reload to try again.</p>`);

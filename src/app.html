@@ -276,6 +276,48 @@ button.chip:hover { border-color: var(--accent); }
   .sw.enter .face.back { animation: none; }
 }
 
+/* Motion: the page moves only when something happens, and not at all with reduced motion. */
+.streak { display: inline-block; margin-left: 8px; padding: 1px 9px; border-radius: 999px; font-weight: 700; color: #7A3B00; background: linear-gradient(90deg, #FFD94A, #FFA94A); }
+#fx { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
+#fx i { position: absolute; width: 8px; height: 12px; border-radius: 2px; }
+.deck { transition: transform .2s ease, box-shadow .2s ease; }
+.deck::after { transition: height .2s ease; }
+.deck:not(.new-deck):hover { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(20,35,57,.08), 0 14px 30px rgba(20,35,57,.14); }
+.deck:not(.new-deck):hover::after { height: 6px; }
+.new-deck .plus { display: inline-block; transition: transform .3s cubic-bezier(.3,1.6,.5,1); }
+.new-deck:hover .plus { transform: rotate(90deg) scale(1.15); }
+.btn, .chip, .opt, .sopt, .chip-btn { transition: border-color .15s, background-color .15s, transform .12s ease; }
+.btn:active:not(:disabled), .opt:active:not(:disabled), .sopt:active:not(:disabled), .chip:active { transform: scale(.97); }
+@media (prefers-reduced-motion: no-preference) {
+  body::before { content: ""; position: fixed; inset: -20vmax; z-index: -1; pointer-events: none; opacity: .55;
+    background: radial-gradient(38vmax 30vmax at 15% 20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+                radial-gradient(34vmax 28vmax at 85% 30%, color-mix(in srgb, var(--mark) 22%, transparent), transparent 70%),
+                radial-gradient(40vmax 30vmax at 50% 95%, color-mix(in srgb, var(--good) 12%, transparent), transparent 70%);
+    animation: drift 26s ease-in-out infinite alternate; }
+  @keyframes drift { to { transform: translate3d(4vmax, -3vmax, 0) rotate(8deg); } }
+  .brand h1 span { background-size: 0% 100%; background-repeat: no-repeat; animation: sweep .9s .2s cubic-bezier(.3,.8,.3,1) forwards; }
+  @keyframes sweep { to { background-size: 100% 100%; } }
+  .view-enter > * { animation: viewin .32s cubic-bezier(.2,.8,.3,1) both; }
+  .view-enter .grid > .deck { animation: rise .45s cubic-bezier(.2,.8,.3,1) both; animation-delay: calc(min(var(--i, 0), 12) * 45ms + 60ms); }
+  .view-enter .pile-item { animation: rise .35s ease-out both; animation-delay: calc(min(var(--i, 0), 12) * 30ms); }
+  @keyframes viewin { from { opacity: 0; transform: translateY(8px); } }
+  .view-enter .bar i { animation: grow .8s .3s cubic-bezier(.2,.8,.3,1) both; transform-origin: left; }
+  @keyframes grow { from { transform: scaleX(0); } }
+  .chip.bump b { display: inline-block; animation: bump .5s cubic-bezier(.3,1.8,.5,1); }
+  @keyframes bump { 40% { transform: scale(1.7); } }
+  .opt.right.just, .sopt.right.just { animation: pop .4s cubic-bezier(.3,1.7,.5,1); }
+  @keyframes pop { 50% { transform: scale(1.03); } }
+  .opt.wrong.just, .sopt.wrong.just, .sw.no.just { animation: shake .42s ease; }
+  @keyframes shake { 20% { transform: translateX(-7px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(2px); } }
+  .sw.ok.just .front { box-shadow: 0 0 0 4px rgba(23,120,74,.25), 0 20px 44px rgba(20,35,57,.16); }
+  .feedback { animation: viewin .3s ease-out both; }
+  .streak { animation: pop .4s cubic-bezier(.3,1.7,.5,1); }
+  .gen .meter i { background-image: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.45) 50%, transparent 70%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+  @keyframes shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+  #toast:not([hidden]) { animation: toastin .28s cubic-bezier(.2,.9,.3,1.2); }
+  @keyframes toastin { from { opacity: 0; transform: translate(-50%, 14px); } }
+}
+
 #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 8px; font-size: .88rem; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
 @media (prefers-reduced-motion: no-preference) {
   .card.enter { animation: deal .22s ease-out; }
@@ -291,6 +333,7 @@ button.chip:hover { border-color: var(--accent); }
   <main id="app"></main>
 </div>
 <div id="toast" hidden></div>
+<div id="fx" aria-hidden="true"></div>
 
 <script>
 const LEARN_AT = 5;
@@ -476,7 +519,7 @@ function openDefaultOnce() {
   const id = defaultDeckId(); if (!id || S.view !== "home" || !getDeck(id)) return;
   const key = "boardroom-english.opened." + S.account.uid;
   try { if (sessionStorage.getItem(key) === id) return; sessionStorage.setItem(key, id); } catch {}
-  S.cur = null; S.recent = []; S.session = { n: 0, ok: 0 };
+  S.cur = null; S.recent = []; S.session = { n: 0, ok: 0, streak: 0 };
   go("play", { deckId: id });
 }
 window.boardroom = { attachStore, detachStore, setAccount, setShared };
@@ -549,7 +592,49 @@ function counts(deck) {
   for (const q of deck.questions) { const p = P[q.id]; if (p && p.l) l++; else if (p && p.r) r++; }
   return { total: deck.questions.length, rep: r, lrn: l, active: deck.questions.length - l };
 }
-function go(view, extra = {}) { Object.assign(S, { view }, extra); render(); window.scrollTo({ top: 0 }); }
+/* Every screen change is a browser history entry, so Back and Forward move between decks, play and piles. */
+const navState = () => ({ bre: 1, view: S.view, deckId: S.deckId, pileTab: S.pileTab, extendId: S.extendId });
+function go(view, extra = {}, fromHistory) {
+  Object.assign(S, { view }, extra); render(); window.scrollTo({ top: 0 }); animateIn();
+  if (fromHistory) return;
+  const st = navState(), was = history.state || {};
+  if (was.view === st.view && was.deckId === st.deckId && was.pileTab === st.pileTab && was.extendId === st.extendId) return;
+  const url = st.view === "home" ? location.pathname + location.search : `#/${st.view}${st.view !== "create" && st.deckId ? "/" + encodeURIComponent(st.deckId) : ""}`;
+  try { history.pushState(st, "", url); } catch {}
+}
+window.addEventListener("popstate", (e) => {
+  const st = e.state && e.state.bre ? e.state : { view: "home" };
+  if (st.view !== "home" && st.view !== "create" && !getDeck(st.deckId)) return go("home", {}, true);
+  if (st.view === "play" && st.deckId !== S.deckId) { S.cur = null; S.recent = []; S.session = { n: 0, ok: 0, streak: 0 }; }
+  go(st.view, { deckId: st.deckId, pileTab: st.pileTab || "repeat", extendId: st.extendId || null, confirmDelete: null }, true);
+});
+function animateIn() { const a = $("#app"); a.classList.remove("view-enter"); void a.offsetWidth; a.classList.add("view-enter"); }
+
+/* Celebrations: a small burst of confetti from a point on the screen. */
+const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+function burst(x, y, n = 18, spread = 1) {
+  const fx = $("#fx"); if (!fx || still() || !fx.animate) return;
+  const colors = ["#FFD94A", "#1D57C4", "#17784A", "#E26D5A", "#7A4CC2", "#2A8A9A", "#FF9F43"];
+  for (let i = 0; i < n; i++) {
+    const p = document.createElement("i");
+    p.style.left = x + "px"; p.style.top = y + "px"; p.style.background = colors[i % colors.length];
+    fx.appendChild(p);
+    const a = Math.random() * Math.PI * 2, v = (60 + Math.random() * 140) * spread;
+    const dx = Math.cos(a) * v, dy = Math.sin(a) * v - 80 * spread;
+    p.animate([{ transform: "translate(-50%,-50%) rotate(0deg)", opacity: 1 },
+      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy + 160}px)) rotate(${Math.random() * 720 - 360}deg)`, opacity: 0 }],
+      { duration: 900 + Math.random() * 600, easing: "cubic-bezier(.2,.7,.4,1)" }).onfinish = () => p.remove();
+  }
+}
+function burstFrom(el, n, spread) { if (!el) return; const r = el.getBoundingClientRect(); burst(r.left + r.width / 2, r.top + r.height / 2, n, spread); }
+function bumpChips(deck) {
+  const c = counts(deck), prev = S.lastCounts && S.lastCounts.id === deck.id ? S.lastCounts : null;
+  S.lastCounts = { id: deck.id, ...c };
+  if (!prev) return;
+  if (c.rep > prev.rep) { const el = $(".chip.rep"); if (el) el.classList.add("bump"); }
+  if (c.lrn > prev.lrn) { const el = $(".chip.lrn"); if (el) el.classList.add("bump"); }
+}
+const sessionHTML = () => S.session.n ? `<p class="session">This session: ${S.session.ok} of ${S.session.n} correct${S.session.streak >= 3 ? `<span class="streak">${S.session.streak} in a row</span>` : ""}</p>` : "";
 
 /* ---------- render ---------- */
 function render() {
@@ -582,7 +667,7 @@ function deckCard(d, i) {
   const isDef = d.id === defaultDeckId();
   const badges = [isSwipe(d) ? `<span class="badge swipe">Swipe deck</span>` : "", isDef ? `<span class="badge def">Your default</span>` : "",
     d.shared ? `<span class="badge shared">${d.public ? "Public" : "Shared with you"}</span>` : ""].join("");
-  return `<article class="deck" style="--deck-c:${deckColor(d, i)}">
+  return `<article class="deck" style="--deck-c:${deckColor(d, i)};--i:${i + 1}">
     <span class="eyebrow">${d.builtin ? "Starter deck" : d.shared ? "From the admin" : "Your deck"}${d.level ? " · " + esc(d.level) : ""}${d.industry ? " · " + esc(d.industry) : ""}</span>
     ${badges ? `<div class="badges">${badges}</div>` : ""}
     <h3>${esc(d.name)}</h3>
@@ -626,7 +711,7 @@ function playHeaderHTML(deck) {
       <button class="chip lrn" data-act="piles" data-id="${deck.id}" data-tab="learned"><b>${c.lrn}</b> Learned</button>
     </div>`;
 }
-function renderPlayHeader() { const h = $("#play-head"); const deck = getDeck(S.deckId); if (h && deck) h.innerHTML = playHeaderHTML(deck); }
+function renderPlayHeader() { const h = $("#play-head"); const deck = getDeck(S.deckId); if (h && deck) { h.innerHTML = playHeaderHTML(deck); bumpChips(deck); } }
 function renderPlay() {
   const deck = getDeck(S.deckId);
   if (!deck) return go("home");
@@ -649,7 +734,7 @@ function renderPlay() {
       <div class="options" role="group" aria-label="Answers">
         ${cur.order.map((oi, k) => {
           let cls = "opt";
-          if (answered) { if (oi === cur.q.answer) cls += " right"; else if (k === cur.picked) cls += " wrong"; }
+          if (answered) { if (oi === cur.q.answer) cls += " right"; else if (k === cur.picked) cls += " wrong"; if (cur.just) cls += " just"; }
           return `<button class="${cls}" data-act="pick" data-k="${k}" ${answered ? "disabled" : ""}><kbd>${k + 1}</kbd><span>${esc(cur.q.options[oi])}</span></button>`;
         }).join("")}
       </div>
@@ -660,8 +745,9 @@ function renderPlay() {
       <div class="next-row"><span class="hint">Press Enter for the next card</span><button class="btn primary" id="next-btn" data-act="next">Next card</button></div>` : `<div class="next-row"><span class="hint">Choose an answer, or press 1–4</span></div>`}
     </div>`;
   }
-  const sess = S.session.n ? `<p class="session">This session: ${S.session.ok} of ${S.session.n} correct</p>` : "";
+  const sess = sessionHTML();
   app.innerHTML = `<div class="bar-row" id="play-head">${playHeaderHTML(deck)}</div>${body}${sess}`;
+  bumpChips(deck); if (cur) cur.just = false;
   const nb = $("#next-btn"); if (nb) nb.focus({ preventScroll: true });
 }
 function pick(k) {
@@ -673,9 +759,11 @@ function pick(k) {
   if (ok) { p.c++; p.s++; if (p.s >= LEARN_AT) { p.l = true; p.r = false; cur.learned = true; } }
   else { p.w++; p.s = 0; p.r = true; }
   p.t = Date.now();
-  S.session.n++; if (ok) S.session.ok++;
+  S.session.n++; if (ok) S.session.ok++; S.session.streak = ok ? (S.session.streak || 0) + 1 : 0;
+  cur.just = true;
   saveProgress(deck.id);
   renderPlay();
+  if (ok) burstFrom($(".opt.right"), cur.learned ? 40 : 14, cur.learned ? 1.4 : .8);
 }
 
 /* Swipe decks: tap to flip, answer on the front, then swipe left (Learned) or right (Repeat). */
@@ -709,12 +797,12 @@ function renderSwipe(deck) {
          <form class="sw-type" id="sw-type"><input id="sw-input" aria-label="Your answer" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(cur.typed || "")}" ${answered ? "disabled" : ""}><button class="btn primary" ${answered ? "disabled" : ""}>Check</button></form>`
       : `<p class="sw-term">${esc(q.term)}</p><p class="sw-prompt">Which meaning is closest?</p>
          <div class="sw-opts" role="group" aria-label="Meanings">${cur.order.map((oi, k) => {
-           let cls = "sopt"; if (answered) { if (oi === q.answer) cls += " right"; else if (k === cur.picked) cls += " wrong"; }
+           let cls = "sopt"; if (answered) { if (oi === q.answer) cls += " right"; else if (k === cur.picked) cls += " wrong"; if (cur.just) cls += " just"; }
            return `<button class="${cls}" data-act="spick" data-k="${k}" ${answered ? "disabled" : ""}><kbd>${k + 1}</kbd><span>${esc(q.options[oi])}</span></button>`;
          }).join("")}</div>`;
     const verdict = answered ? `<p class="sw-verdict" role="status">${ok ? "Correct!" : type ? `Not quite. It's “${esc(q.term)}”.` : "Not quite."}</p>` : "";
     body = `<div class="sw-stage">
-      <div class="sw ${answered ? (ok ? "ok" : "no") : "enter"} ${cur.flipped ? "flipped" : ""}" id="sw" style="--h:${swipeHue(deck, q)}">
+      <div class="sw ${answered ? (ok ? "ok" : "no") : "enter"} ${cur.flipped ? "flipped" : ""} ${cur.just ? "just" : ""}" id="sw" style="--h:${swipeHue(deck, q)}">
         <span class="stamp l">Learned</span><span class="stamp r">Repeat</span>
         <div class="sw-inner">
           <div class="face front" ${cur.flipped ? `aria-hidden="true"` : ""}><div class="sw-top"><span class="kind">${kind}</span>${tag}</div>${front}${verdict}<p class="sw-tip">Tap the card to flip it</p></div>
@@ -725,8 +813,9 @@ function renderSwipe(deck) {
       <p class="hint center">Swipe left if you know it, right to see it again. Keys: ← and → to swipe, F to flip.</p>
     </div>`;
   }
-  const sess = S.session.n ? `<p class="session">This session: ${S.session.ok} of ${S.session.n} correct</p>` : "";
+  const sess = sessionHTML();
   $("#app").innerHTML = `<div class="bar-row" id="play-head">${playHeaderHTML(deck)}</div>${body}${sess}`;
+  bumpChips(deck); if (cur) cur.just = false;
   if (cur && !cur.flipped && !(cur.picked != null || cur.typed != null)) { const inp = $("#sw-input"); if (inp && !matchMedia("(pointer: coarse)").matches) inp.focus({ preventScroll: true }); }
   queueImages(deck);
 }
@@ -734,8 +823,10 @@ function swipeAnswer(ok) {
   const deck = getDeck(S.deckId), q = S.cur.q;
   const p = (prog(deck.id)[q.id] ||= { s: 0, c: 0, w: 0, r: false, l: false });
   if (ok) p.c++; else p.w++;
-  p.t = Date.now(); S.session.n++; if (ok) S.session.ok++;
+  p.t = Date.now(); S.session.n++; if (ok) S.session.ok++; S.session.streak = ok ? (S.session.streak || 0) + 1 : 0;
+  S.cur.just = true;
   saveProgress(deck.id); renderPlay();
+  if (ok) burstFrom($("#sw .sw-verdict") || $("#sw"), 16, .9);
 }
 function swipePick(k) {
   const cur = S.cur; if (!cur || cur.picked != null || cur.typed != null || cur.flipped) return;
@@ -756,6 +847,7 @@ function swipe(dir) {
   const p = (prog(deck.id)[cur.q.id] ||= { s: 0, c: 0, w: 0, r: false, l: false });
   if (dir === "left") { p.l = true; p.r = false; } else { p.r = true; p.l = false; }
   p.t = Date.now(); saveProgress(deck.id);
+  if (dir === "left") burstFrom($(".chip.lrn"), 14, .7);
   renderPlayHeader();
   const el = $("#sw"), still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (el && !still) {
@@ -851,14 +943,14 @@ function renderPiles() {
       <button class="tab" role="tab" aria-selected="${tab === "repeat"}" data-act="tab" data-tab="repeat">Repeat (${c.rep})</button>
       <button class="tab" role="tab" aria-selected="${tab === "learned"}" data-act="tab" data-tab="learned">Learned (${c.lrn})</button>
     </div>
-    <div class="pile-list">${items.length ? items.map((q) => { const p = P[q.id];
+    <div class="pile-list">${items.length ? items.map((q, qi) => { const p = P[q.id];
       const move = tab === "learned" ? `<button class="btn" data-act="move" data-to="repeat" data-q="${q.id}">Move to Repeat</button>` : `<button class="btn" data-act="move" data-to="learned" data-q="${q.id}">Move to Learned</button>`;
-      if (swipe) return `<div class="pile-item">
+      if (swipe) return `<div class="pile-item" style="--i:${qi}">
         <div class="with-thumb"><div class="sw" style="--h:${swipeHue(deck, q)};cursor:default">${picHTML(deck, q, "thumb")}</div>
           <div><p class="pq">${esc(q.term)} <span class="count">· ${esc(KIND_LABEL[q.kind] || "Word")}</span></p><p class="pa">${esc(q.meaning)}</p>${q.example ? `<p class="pe">“${esc(q.example)}”</p>` : ""}</div></div>
         <div class="side"><span class="count">${p.c || 0} right · ${p.w || 0} wrong</span>${move}</div>
       </div>`;
-      return `<div class="pile-item">
+      return `<div class="pile-item" style="--i:${qi}">
       <div><p class="pq">${esc(q.q)}</p><p class="pa">✓ ${esc(q.options[q.answer])}</p>${q.explain ? `<p class="pe">${esc(q.explain)}</p>` : ""}</div>
       <div class="side">${tab === "learned" ? `<span class="count">${p.c} right · ${p.w} wrong</span>` : `${pips(p.s)}<span class="count">missed ${p.w}×</span>`}${move}</div>
     </div>`; }).join("") : empty}</div>`;
@@ -1085,6 +1177,7 @@ async function startGeneration(form) {
   else if (g.made) g.note = `${g.made} questions were saved before this happened.`;
   else g.note = "";
   updateGen();
+  if (!g.error && g.made && g.made >= g.target) burstFrom($("#gen-area .gen"), 36, 1.3);
   if (window.boardroom.refreshAccount) window.boardroom.refreshAccount();
   if (deck && format === "swipe") setTimeout(() => queueImages(deck), 1500);
 }
@@ -1096,7 +1189,7 @@ document.addEventListener("click", (e) => {
   if (act === "home") return go("home", { confirmDelete: null });
   if (act === "create") return go("create", { extendId: null, gen: S.gen && S.gen.running ? S.gen : null });
   if (act === "extend") return go("create", { extendId: id, gen: S.gen && S.gen.running ? S.gen : null });
-  if (act === "play") { if (S.deckId !== id) { S.cur = null; S.recent = []; S.session = { n: 0, ok: 0 }; } return go("play", { deckId: id }); }
+  if (act === "play") { if (S.deckId !== id) { S.cur = null; S.recent = []; S.session = { n: 0, ok: 0, streak: 0 }; } return go("play", { deckId: id }); }
   if (act === "piles") return go("piles", { deckId: id, pileTab: b.dataset.tab || "repeat" });
   if (act === "tab") { S.pileTab = b.dataset.tab; return renderPiles(); }
   if (act === "pick") return pick(Number(b.dataset.k));
@@ -1123,6 +1216,7 @@ document.addEventListener("click", (e) => {
   if (act === "stop") { if (S.gen && S.gen.ctl) S.gen.ctl.abort(); return; }
 });
 $("#home-btn").addEventListener("click", () => go("home", { confirmDelete: null }));
+try { history.replaceState({ bre: 1, view: "home" }, "", location.pathname + location.search); } catch {}
 document.addEventListener("change", (e) => {
   if (e.target.id === "f-industry") { const o = $("#f-industry-other"); if (o) { o.hidden = e.target.value !== "other"; if (!o.hidden) o.focus(); } }
 });
