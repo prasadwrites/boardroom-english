@@ -43,7 +43,7 @@ jobs:
         run: |
           set +e  # each setup step is independent; a failure in one shouldn't skip the others
           gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
-          gcloud services enable firestore.googleapis.com identitytoolkit.googleapis.com --project "$PROJECT"
+          gcloud services enable firestore.googleapis.com identitytoolkit.googleapis.com aiplatform.googleapis.com --project "$PROJECT"
           if gcloud firestore databases describe --database='(default)' --project "$PROJECT" >/dev/null 2>&1; then
             echo "Firestore database already exists"
           else

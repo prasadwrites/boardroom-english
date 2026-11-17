@@ -22,6 +22,20 @@
           "functionId": "account",
           "region": "us-central1"
         }
+      },
+      {
+        "source": "/api/image",
+        "function": {
+          "functionId": "image",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/img/**",
+        "function": {
+          "functionId": "image",
+          "region": "us-central1"
+        }
       }
     ],
     "headers": [

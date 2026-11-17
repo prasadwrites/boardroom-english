@@ -15,5 +15,15 @@ service cloud.firestore {
       allow read: if signedInAs(uid);
       allow write: if false;
     }
+    // Decks the admin shared: public ones for everyone signed in, the rest for the accounts they're assigned to.
+    match /shared/{sid} {
+      allow read: if request.auth != null && !suspended(request.auth.uid)
+        && (resource.data.public == true || request.auth.uid in resource.data.assignees);
+      allow write: if false;
+    }
+    // Card pictures are served by the image function only.
+    match /images/{id} {
+      allow read, write: if false;
+    }
   }
 }

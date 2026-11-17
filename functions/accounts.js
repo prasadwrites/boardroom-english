@@ -65,6 +65,7 @@ export function summary(a, user) {
     email: a.email, plan: a.plan in PLANS ? a.plan : "free", planLabel: plan.label,
     maxDecks: plan.decks, maxQuestions: plan.questions, decksUsed: Object.keys(decks).length, decks,
     needsCode: !!a.code, suspended: !!a.suspended, isAdmin: user ? isAdmin(user) : false,
+    uid: user ? user.uid : undefined, defaultDeck: a.defaultDeck || "",
   };
 }
 
@@ -108,6 +109,68 @@ export async function deleteDeck(user, deckId) {
   batch.delete(items.doc("prog-" + deckId));
   batch.update(accountRef(user.uid), new FieldPath("decks", deckId), FieldValue.delete());
   await batch.commit();
+  // Its pictures go too, unless the admin shared the deck: the shared copy still shows them.
+  if (!(await db.collection("shared").doc(sharedId(user.uid, deckId)).get()).exists) {
+    const pics = await db.collection("images").where("uid", "==", user.uid).where("deckId", "==", deckId).get();
+    for (let i = 0; i < pics.docs.length; i += 400) {
+      const b = db.batch(); pics.docs.slice(i, i + 400).forEach((d) => b.delete(d.ref)); await b.commit();
+    }
+  }
+}
+
+// ---------- sharing ----------
+// The admin can share any account's deck: a copy goes to shared/{ownerUid~deckId}, readable by everyone signed in (public)
+// or by the listed accounts (assignees). See firestore.rules.
+export const sharedId = (ownerUid, deckId) => `${ownerUid}~${deckId}`;
+const BUILTIN_DECKS = new Set(["b-phrases", "b-vocab", "b-meetings"]);
+const snapshot = (v) => ({
+  id: v.id, name: v.name || "Deck", focus: v.focus || "", level: v.level || "", style: v.style || "", color: v.color || "",
+  format: v.format === "swipe" ? "swipe" : "quiz", industry: v.industry || "", questions: v.questions,
+});
+
+export async function listDecks() {
+  const shares = {};
+  (await db.collection("shared").get()).docs.forEach((d) => (shares[d.id] = d.data()));
+  const decks = [];
+  (await db.collectionGroup("items").get()).docs.forEach((d) => {
+    const owner = d.ref.parent.parent;
+    if (!d.id.startsWith("deck-") || !owner || owner.parent.id !== "users") return;
+    const v = d.data();
+    if (!v || !Array.isArray(v.questions) || !DECK_ID.test(String(v.id))) return;
+    const sid = sharedId(owner.id, v.id), s = shares[sid];
+    decks.push({
+      sid, ownerUid: owner.id, deckId: v.id, name: v.name || "Deck", focus: v.focus || "", level: v.level || "",
+      format: v.format === "swipe" ? "swipe" : "quiz", industry: v.industry || "", cards: v.questions.length, createdAt: v.createdAt || 0,
+      public: !!(s && s.public), assignees: (s && s.assignees) || [], shared: !!s, sharedCards: s && s.deck ? s.deck.questions.length : 0,
+    });
+  });
+  return decks.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+// Sets who can see a deck. Saving also refreshes the shared copy from the owner's current deck.
+export async function shareDeck(ownerUid, deckId, { public: isPublic, assignees } = {}) {
+  if (typeof ownerUid !== "string" || !ownerUid || !DECK_ID.test(String(deckId))) throw new HttpError(400, "bad_request");
+  const v = (await db.doc(`users/${ownerUid}/items/deck-${deckId}`).get()).data();
+  if (!v || !Array.isArray(v.questions)) throw new HttpError(404, "not_found");
+  const people = [...new Set((Array.isArray(assignees) ? assignees : []).filter((u) => typeof u === "string" && u && u.length <= 128))].slice(0, 2000);
+  const ref = db.collection("shared").doc(sharedId(ownerUid, deckId));
+  if (!isPublic && !people.length) return ref.delete();
+  await ref.set({ ownerUid, deckId, public: !!isPublic, assignees: people, deck: snapshot(v), updatedAt: Date.now() });
+}
+
+// A user's default deck is "builtin:<id>", a shared deck id (ownerUid~deckId) or "" for none.
+async function checkDefault(uid, value) {
+  if (!value) return "";
+  if (typeof value !== "string") throw new HttpError(400, "bad_request");
+  if (value.startsWith("builtin:")) { if (!BUILTIN_DECKS.has(value.slice(8))) throw new HttpError(400, "bad_deck"); return value; }
+  const [ownerUid, deckId] = value.split("~");
+  const ref = db.collection("shared").doc(sharedId(ownerUid, deckId));
+  const snap = await ref.get();
+  if (snap.exists) {
+    const s = snap.data();
+    if (!s.public && !(s.assignees || []).includes(uid)) await ref.update({ assignees: FieldValue.arrayUnion(uid) });
+  } else await shareDeck(ownerUid, deckId, { public: false, assignees: [uid] });
+  return sharedId(ownerUid, deckId);
 }
 
 // ---------- admin ----------
@@ -130,7 +193,7 @@ export async function listAccounts() {
       created: u.metadata.creationTime || "", lastSignIn: u.metadata.lastSignInTime || "",
       plan: a.plan in PLANS ? a.plan : "free", code: a.code || "", suspended: !!(a.suspended || u.disabled),
       decksUsed: Object.keys(decks).length, questionsUsed: Object.values(decks).reduce((s, n) => s + (n || 0), 0),
-      isAdmin: u.email === ADMIN_EMAIL && u.emailVerified,
+      isAdmin: u.email === ADMIN_EMAIL && u.emailVerified, defaultDeck: a.defaultDeck || "",
     };
   }).sort((x, y) => (y.lastSignIn ? Date.parse(y.lastSignIn) : 0) - (x.lastSignIn ? Date.parse(x.lastSignIn) : 0));
 }
@@ -149,6 +212,7 @@ export async function updateAccount(admin, uid, changes) {
     if (uid === admin.uid) throw new HttpError(400, "cant_suspend_self");
     patch.suspended = !!changes.suspended;
   }
+  if ("defaultDeck" in changes) patch.defaultDeck = await checkDefault(uid, changes.defaultDeck);
   // Make sure the account doc exists (seeded from the user's decks) before patching it.
   await getAccount({ uid, email: target.email, email_verified: target.emailVerified });
   await accountRef(uid).update(patch);

@@ -193,6 +193,89 @@ button.chip:hover { border-color: var(--accent); }
 .plan-line { margin: 0 0 16px; font-size: .88rem; color: var(--muted); }
 .plan-line strong { color: var(--ink); }
 
+/* Deck badges and the create form's format choice */
+.badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.badge { font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; border-radius: 999px; padding: 2px 8px; background: var(--rule); color: var(--muted); }
+.badge.swipe { background: linear-gradient(120deg, hsl(280 80% 92%), hsl(200 80% 88%)); color: #33285A; }
+.badge.def { background: var(--mark); color: #2A2100; }
+.badge.shared { background: var(--good-bg); color: var(--good); }
+.fmt { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.fmt button { text-align: left; border: 1.5px solid var(--line); background: var(--surface); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; }
+.fmt button b { font-family: var(--display); font-size: 1.05rem; }
+.fmt button span { font-size: .82rem; color: var(--muted); }
+.fmt button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+@media (max-width: 520px) { .fmt { grid-template-columns: 1fr; } }
+.checks { display: flex; gap: 14px; flex-wrap: wrap; padding-top: 4px; }
+.checks label { font-weight: 500; display: inline-flex; gap: 6px; align-items: center; }
+.checks input { width: auto; }
+
+/* Swipe decks: a stack of soft-coloured flip cards. Each card's hue comes from its position (--h). */
+.sw-stage { max-width: 440px; margin: 0 auto; }
+.sw { --h: 210; --face-ink: #1B2433; --face-muted: rgba(27,36,51,.68); --chip: rgba(255,255,255,.62); --chip-line: rgba(27,36,51,.10);
+  --c1: hsl(var(--h) 78% 93%); --c2: hsl(calc(var(--h) + 38) 70% 84%);
+  position: relative; perspective: 1400px; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab; }
+.sw.ok { --c1: hsl(140 62% 88%); --c2: hsl(160 55% 76%); }
+.sw.no { --c1: hsl(2 85% 92%); --c2: hsl(348 72% 82%); }
+.sw.dragging { cursor: grabbing; }
+.sw-inner { display: grid; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.2,.75,.25,1); }
+.sw.flipped .sw-inner { transform: rotateY(180deg); }
+.face { grid-area: 1 / 1; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 24px; padding: 22px; min-height: 460px;
+  display: flex; flex-direction: column; gap: 12px; color: var(--face-ink); background: linear-gradient(155deg, var(--c1), var(--c2));
+  box-shadow: 0 2px 6px rgba(20,35,57,.10), 0 20px 44px rgba(20,35,57,.16); transition: background .3s; }
+.face.back { transform: rotateY(180deg); }
+.sw-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.kind { font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; background: var(--chip); border: 1px solid var(--chip-line); border-radius: 999px; padding: 3px 10px; }
+.sw-term { font-family: var(--display); font-weight: 700; font-size: clamp(1.7rem, 7vw, 2.3rem); line-height: 1.12; text-align: center; margin: 18px 0 4px; overflow-wrap: anywhere; }
+.sw-prompt { margin: 0; text-align: center; color: var(--face-muted); font-size: .9rem; }
+.sw-meaning { margin: 0; text-align: center; font-size: 1.1rem; font-weight: 600; }
+.sw-hint { font-family: var(--mono); font-size: 1.5rem; letter-spacing: .28em; text-align: center; margin: 10px 0 0; overflow-wrap: anywhere; }
+.sw-opts { display: grid; gap: 8px; margin-top: 6px; }
+.sopt { text-align: left; border: 1px solid var(--chip-line); background: var(--chip); color: inherit; border-radius: 14px; padding: 10px 14px; font-size: .95rem; display: flex; gap: 10px; align-items: flex-start; }
+.sopt kbd { font-family: var(--mono); font-size: .72rem; opacity: .6; margin-top: 2px; }
+.sopt:hover:not(:disabled) { border-color: var(--face-ink); }
+.sopt:disabled { cursor: default; opacity: .6; }
+.sopt.right { opacity: 1; border: 2px solid #17784A; background: rgba(255,255,255,.8); }
+.sopt.wrong { opacity: 1; border: 2px solid #B83A33; }
+.sw-type { display: flex; gap: 8px; margin-top: 8px; }
+.sw-type input { flex: 1; min-width: 0; border: 1.5px solid var(--chip-line); background: var(--chip); color: inherit; border-radius: 12px; padding: 10px 12px; font-size: 1.05rem; }
+.sw-verdict { margin: auto 0 0; text-align: center; font-weight: 700; }
+.sw-tip { margin: auto 0 0; text-align: center; font-size: .8rem; color: var(--face-muted); }
+.sw-verdict + .sw-tip { margin-top: 0; }
+.pic { aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: linear-gradient(140deg, hsl(calc(var(--h) + 180) 60% 85%), hsl(calc(var(--h) + 220) 55% 75%));
+  display: grid; place-items: center; box-shadow: inset 0 0 0 1px var(--chip-line); }
+.pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pic .ph { font-family: var(--display); font-weight: 700; font-size: 5rem; color: rgba(255,255,255,.85); text-shadow: 0 4px 18px rgba(0,0,0,.12); }
+.back .sw-term { font-size: 1.5rem; margin: 4px 0 0; }
+.sw-ex { margin: 0; text-align: center; font-style: italic; color: var(--face-muted); }
+.stamp { position: absolute; top: 26px; z-index: 2; font-family: var(--display); font-weight: 700; font-size: 1.3rem; padding: 4px 12px; border-radius: 10px; border: 3px solid; opacity: 0; pointer-events: none; background: rgba(255,255,255,.85); }
+.stamp.l { right: 22px; color: #17784A; transform: rotate(12deg); }
+.stamp.r { left: 22px; color: #B83A33; transform: rotate(-12deg); }
+.sw-actions { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; margin-top: 18px; }
+.sw-actions .lrn { color: var(--good); }
+.sw-actions .rep { color: var(--bad); }
+.center { text-align: center; }
+.thumb { width: 56px; height: 56px; border-radius: 12px; flex: none; }
+.thumb .ph { font-size: 1.6rem; }
+.pile-item .with-thumb { display: flex; gap: 12px; align-items: flex-start; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .sw { --c1: hsl(var(--h) 32% 26%); --c2: hsl(calc(var(--h) + 38) 34% 18%); --face-ink: #EEF2F8; --face-muted: rgba(238,242,248,.7); --chip: rgba(255,255,255,.08); --chip-line: rgba(255,255,255,.14); }
+  :root:not([data-theme="light"]) .sw.ok { --c1: hsl(145 45% 26%); --c2: hsl(160 45% 18%); }
+  :root:not([data-theme="light"]) .sw.no { --c1: hsl(2 50% 30%); --c2: hsl(348 45% 21%); }
+  :root:not([data-theme="light"]) .sopt.right { background: rgba(82,199,143,.18); border-color: #52C78F; }
+  :root:not([data-theme="light"]) .sopt.wrong { border-color: #F2837A; }
+}
+:root[data-theme="dark"] .sw { --c1: hsl(var(--h) 32% 26%); --c2: hsl(calc(var(--h) + 38) 34% 18%); --face-ink: #EEF2F8; --face-muted: rgba(238,242,248,.7); --chip: rgba(255,255,255,.08); --chip-line: rgba(255,255,255,.14); }
+:root[data-theme="dark"] .sw.ok { --c1: hsl(145 45% 26%); --c2: hsl(160 45% 18%); }
+:root[data-theme="dark"] .sw.no { --c1: hsl(2 50% 30%); --c2: hsl(348 45% 21%); }
+:root[data-theme="dark"] .sopt.right { background: rgba(82,199,143,.18); border-color: #52C78F; }
+:root[data-theme="dark"] .sopt.wrong { border-color: #F2837A; }
+@media (prefers-reduced-motion: reduce) { .sw-inner { transition: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .sw.enter .face { animation: rise .3s ease-out; }
+  @keyframes rise { from { transform: translateY(10px) scale(.98); opacity: .5; } }
+  .sw.enter .face.back { animation: none; }
+}
+
 #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 8px; font-size: .88rem; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
 @media (prefers-reduced-motion: no-preference) {
   .card.enter { animation: deal .22s ease-out; }
@@ -300,6 +383,9 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const hash = (str) => { let h = 2166136261; for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+const INDUSTRIES = ["General business", "IT & software", "Finance & banking", "Healthcare", "Sales & marketing", "Consulting", "Manufacturing", "Legal", "Human resources", "Hospitality & travel", "Retail & e-commerce", "Energy"];
+const KIND_LABEL = { word: "Word", phrase: "Phrase", idiom: "Idiom" };
 let toastTimer;
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2600); }
 
@@ -364,8 +450,37 @@ function detachStore() {
 }
 function refresh() { if (S.view !== "play" || (S.cur && S.cur.picked != null)) render(); else renderPlayHeader(); }
 /* The site's sign-in script reports the account's plan and usage here (null when signed out). */
-function setAccount(info) { S.account = info; if (S.view === "create" && !(S.gen && S.gen.running)) renderCreate(); }
-window.boardroom = { attachStore, detachStore, setAccount };
+function setAccount(info) {
+  S.account = info;
+  if (S.view === "create" && !(S.gen && S.gen.running)) renderCreate(); else if (S.view === "home") render();
+  openDefaultOnce();
+}
+/* Decks the admin shared with this account (public or assigned). They're read-only copies; progress is the viewer's own. */
+function setShared(list) {
+  S.shared = {};
+  const me = S.account && S.account.uid;
+  for (const v of list || []) {
+    if (!v || !v.deck || !Array.isArray(v.deck.questions) || (me && v.ownerUid === me && !v.assignees?.includes(me))) continue;
+    const id = "sh-" + v.sid;
+    S.shared[id] = { ...v.deck, id, srcId: v.deckId, owner: v.ownerUid, shared: true, public: !!v.public, createdAt: v.updatedAt || 0 };
+  }
+  if (S.view === "home") render();
+  openDefaultOnce();
+}
+function defaultDeckId() {
+  const d = S.account && S.account.defaultDeck;
+  if (!d) return null;
+  return d.startsWith("builtin:") ? d.slice(8) : "sh-" + d;
+}
+/* The account's default deck opens by itself once per browser session, the first time it's available. */
+function openDefaultOnce() {
+  const id = defaultDeckId(); if (!id || S.view !== "home" || !getDeck(id)) return;
+  const key = "boardroom-english.opened." + S.account.uid;
+  try { if (sessionStorage.getItem(key) === id) return; sessionStorage.setItem(key, id); } catch {}
+  S.cur = null; S.recent = []; S.session = { n: 0, ok: 0 };
+  go("play", { deckId: id });
+}
+window.boardroom = { attachStore, detachStore, setAccount, setShared };
 
 async function initCloud() {
   if (!window.claude || !window.claude.use) return;
@@ -387,7 +502,7 @@ function getGenerator() {
   if (genPromise) return genPromise;
   if (IN_CLAUDE) {
     genPromise = claude.use("sample").catch(() => null).then((sample) => sample && {
-      batch: (meta, n, avoid, slant, signal) => sample.json(buildPrompt(meta, n, avoid, slant), { signal, cache: false }),
+      batch: (meta, n, avoid, slant, signal) => sample.json(meta.format === "swipe" ? buildSwipePrompt(meta, n, avoid) : buildPrompt(meta, n, avoid, slant), { signal, cache: false }),
     });
   } else {
     genPromise = Promise.resolve({
@@ -637,13 +752,41 @@ function genHTML() {
 function updateGen() { const a = $("#gen-area"); if (S.view === "create" && a) a.innerHTML = genHTML(); const b = $("#gen-btn"); if (b) b.disabled = !!(S.gen && S.gen.running) || !planInfo(S.extendId ? getDeck(S.extendId) : null).ok; }
 
 const SLANTS = ["meetings and presentations", "phone and video calls", "emails and written follow-ups", "negotiation and sales", "feedback and managing people", "small talk and networking", "finance, budgets and numbers", "projects, deadlines and planning", "customer and client conversations", "strategy and decision-making"];
-function buildPrompt({ name, focus, level, style }, n, avoid, slant) {
+const KINDS = ["word", "phrase", "idiom"];
+const industryLine = (industry) => industry ? `Industry: the learner works in ${industry}. Prefer vocabulary, situations and examples from that industry.\n` : "";
+function buildSwipePrompt({ name, focus, level, industry, kinds }, n, avoid) {
+  kinds = kinds && kinds.length ? kinds : KINDS;
+  return `You write vocabulary flashcards for an adult professional building their Business English vocabulary.
+
+Deck: ${name}
+Focus: ${focus}
+Learner level (CEFR): ${level}
+${industryLine(industry)}Teach a mix of: ${kinds.map((k) => k + "s").join(", ")}.
+
+Write exactly ${n} NEW cards. Each teaches one ${kinds.join(", ")} that people really use at work today.
+${avoid.length ? `Do not repeat any of these, which the deck already has: ${avoid.join("; ")}` : ""}
+
+Each card has:
+- "term": the ${kinds.join(" / ")} itself, 1-6 words.
+- "kind": one of ${kinds.map((k) => `"${k}"`).join(", ")}.
+- "meaning": its meaning in plain English, under 110 characters.
+- "example": one natural sentence using it at work, under 160 characters.
+- "options": 4 short meanings, exactly one the closest meaning of the term, the other three plausible but wrong. Each under 90 characters.
+- "answer": the index (0-3) of the correct option. Vary its position.
+- "mode": "type" for about one card in three, only when the term is one or two words of plain letters; otherwise "choice".
+- "scene": a vivid, concrete scene for an illustration that shows the meaning (characters, objects, setting), under 160 characters, with no text or writing in it.
+Use straight or curly quotes, no markdown.
+
+Reply with only a JSON array, no other text:
+[{"term":"bottleneck","kind":"word","meaning":"The point where work slows down or gets stuck","example":"Approvals are the bottleneck: everything waits for sign-off.","options":["A point where work slows down or gets stuck","The fastest step in a process","A type of packaging","A final quality check"],"answer":0,"mode":"type","scene":"A long queue of tiny cheerful paper documents squeezing through the narrow neck of a giant glass bottle on an office desk"}]`;
+}
+function buildPrompt({ name, focus, level, style, industry }, n, avoid, slant) {
   return `You write multiple-choice flashcards for an adult professional improving their SPOKEN Business English.
 
 Deck: ${name}
 Focus: ${focus}
 Learner level (CEFR): ${level}
-Question type: ${style}${style === "Mixed" ? " (vary between meaning, best response in a situation, fill in the blank, and most natural/formal option)" : ""}
+${industryLine(industry)}Question type: ${style}${style === "Mixed" ? " (vary between meaning, best response in a situation, fill in the blank, and most natural/formal option)" : ""}
 Where it fits the focus, lean toward this setting for this batch: ${slant}.
 
 Write exactly ${n} NEW questions. Each tests one item (a phrase, word, idiom, collocation or response) that people really say at work today.
@@ -660,10 +803,21 @@ Rules:
 Reply with only a JSON array, no other text:
 [{"term":"touch base","q":"\\"Let's touch base next week.\\" What does the speaker want?","options":["To briefly check in","To sign the contract","To restart the project","To cancel the meeting"],"answer":0,"explain":"Touch base = have a short catch-up."}]`;
 }
-function cleanItems(v) {
-  const arr = Array.isArray(v) ? v : v && Array.isArray(v.questions) ? v.questions : [];
+const typeable = (term) => /^[A-Za-z][A-Za-z'-]*( [A-Za-z][A-Za-z'-]*)?$/.test(term) && term.length <= 24;
+function cleanItems(v, format) {
+  const arr = Array.isArray(v) ? v : v && Array.isArray(v.questions) ? v.questions : v && Array.isArray(v.cards) ? v.cards : [];
   const out = [];
   for (const it of arr) {
+    if (format === "swipe") {
+      if (!it || typeof it.term !== "string" || !it.term.trim() || !it.meaning || !Array.isArray(it.options) || it.options.length !== 4) continue;
+      const opts = it.options.map((o) => String(o ?? "").trim().slice(0, 160));
+      const a = Number(it.answer);
+      if (opts.some((o) => !o) || new Set(opts.map((o) => o.toLowerCase())).size !== 4 || !Number.isInteger(a) || a < 0 || a > 3) continue;
+      const term = it.term.trim().slice(0, 80);
+      out.push({ term, q: term, kind: KINDS.includes(it.kind) ? it.kind : term.includes(" ") ? "phrase" : "word", meaning: String(it.meaning).trim().slice(0, 200),
+        example: String(it.example || "").trim().slice(0, 240), options: opts, answer: a, mode: it.mode === "type" && typeable(term) ? "type" : "choice", scene: String(it.scene || "").slice(0, 240) });
+      continue;
+    }
     if (!it || typeof it.q !== "string" || !Array.isArray(it.options) || it.options.length !== 4) continue;
     const opts = it.options.map((o) => String(o ?? "").trim());
     if (opts.some((o) => !o) || new Set(opts.map((o) => o.toLowerCase())).size !== 4) continue;
@@ -696,9 +850,11 @@ async function startGeneration(form) {
   updateGen();
   if (!gen) { g.running = false; g.note = ""; g.error = "Deck generation needs this page open in claude.ai or the Claude app, signed in."; return updateGen(); }
   let deck = form.extendId ? local.decks[form.extendId] : null;
-  const meta = deck ? { name: deck.name, focus: form.focus, level: form.level, style: form.style }
-    : { name: form.name, focus: form.focus, level: form.level, style: form.style };
-  const pending = deck ? null : { id: "u" + Date.now().toString(36), name: form.name, focus: form.focus, level: form.level, style: form.style, createdAt: Date.now(), color: COLORS[(Object.keys(local.decks).length + 3) % COLORS.length], questions: [] };
+  const format = deck ? (deck.format === "swipe" ? "swipe" : "quiz") : form.format;
+  const meta = { name: deck ? deck.name : form.name, focus: form.focus, level: form.level, style: form.style, industry: form.industry, format, kinds: form.kinds };
+  const pending = deck ? null : { id: "u" + Date.now().toString(36), name: form.name, focus: form.focus, level: form.level, style: form.style, format, industry: form.industry, kinds: form.kinds,
+    createdAt: Date.now(), color: COLORS[(Object.keys(local.decks).length + 3) % COLORS.length], questions: [] };
+  if (deck) { deck.industry = form.industry; if (format === "swipe") deck.kinds = form.kinds; }
   meta.deckId = (deck || pending).id;
   const seen = new Set((deck ? deck.questions : []).map((q) => norm(q.q)));
   let round = 0, emptyRounds = 0;
@@ -713,7 +869,7 @@ async function startGeneration(form) {
       let added = 0, fatal = null, failed = 0;
       for (const res of results) {
         if (res.status === "fulfilled") {
-          for (const it of cleanItems(res.value)) {
+          for (const it of cleanItems(res.value, meta.format)) {
             const key = norm(it.q);
             if (seen.has(key) || g.made >= g.target) continue;
             seen.add(key); it.id = "q" + target.questions.length; target.questions.push(it); g.made++; added++;
@@ -739,6 +895,7 @@ async function startGeneration(form) {
   else g.note = "";
   updateGen();
   if (window.boardroom.refreshAccount) window.boardroom.refreshAccount();
+  if (deck && format === "swipe") setTimeout(() => queueImages(deck), 1500);
 }
 
 /* ---------- events ---------- */
