@@ -10,6 +10,10 @@ const html = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Business English flashcards with Repeat and Learned piles and AI-generated decks.">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -32,4 +36,8 @@ for (const name of ["auth", "admin"]) {
     bundle: true, format: "esm", minify: true, target: "es2020", legalComments: "none",
   });
 }
-console.log("Built public/index.html, public/admin.html, public/auth.js and public/admin.js");
+writeFileSync(new URL("../public/manifest.webmanifest", import.meta.url), JSON.stringify({
+  name: "Boardroom English", short_name: "Boardroom", start_url: "/", display: "fullscreen", background_color: "#E8EDF5", theme_color: "#E8EDF5",
+  icons: [{ src: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="20" fill="#1D57C4"/><text x="48" y="62" font-family="Arial" font-weight="700" font-size="44" text-anchor="middle" fill="#FFD94A">BE</text></svg>'), sizes: "any", type: "image/svg+xml" }],
+}));
+console.log("Built public/manifest.webmanifest, public/index.html, public/admin.html, public/auth.js and public/admin.js");

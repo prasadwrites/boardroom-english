@@ -8,3 +8,4 @@ public/auth.js
 public/admin.js
 public/admin.html
 functions/.env.local
+public/manifest.webmanifest

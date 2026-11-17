@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Business English flashcards with Repeat and Learned piles and AI-generated decks.">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -609,7 +613,7 @@ function openDefaultOnce() {
   const key = "boardroom-english.opened." + S.account.uid;
   try { if (sessionStorage.getItem(key) === id) return; sessionStorage.setItem(key, id); } catch {}
   S.cur = null; S.recent = []; S.session = { n: 0, ok: 0, streak: 0 };
-  go("play", { deckId: id });
+  go("play", { deckId: id }); setFocus(true);
 }
 /* Visitors who aren't signed in play the admin's landing deck: ${ANON_FREE} questions, then they sign up to keep going. */
 const ANON_FREE = 10, ANON_KEY = "boardroom-english.anon";
@@ -634,7 +638,7 @@ function openLandingOnce() {
   if (S.landed) return; S.landed = true;  // once per visit: arriving at the site opens the landing deck in full screen
   S.cur = null; S.recent = []; S.session = { n: 0, ok: 0, streak: 0 };
   go("play", { deckId: S.landing.id });
-  if (!(S.gate && anon())) setFocus(true);
+  setFocus(true);
 }
 function askSignUp() {
   if (window.boardroom.openSignIn) window.boardroom.openSignIn({ title: "Sign up to keep your piles", text: "Create a free account to save your Learned and Repeat piles and keep playing. You'll also get every free deck the admin publishes." });
@@ -738,7 +742,7 @@ const phone = () => !IN_CLAUDE && matchMedia("(max-width: 560px)").matches;
 function go(view, extra = {}, fromHistory) {
   const enteringPlay = view === "play" && (S.view !== "play" || (extra.deckId && extra.deckId !== S.deckId));
   Object.assign(S, { view }, extra); render(); window.scrollTo({ top: 0 }); animateIn();
-  if (enteringPlay && phone() && !(S.gate && anon())) setFocus(true);
+  if (enteringPlay && phone()) setFocus(true);
   if (fromHistory) return;
   const st = navState(), was = history.state || {};
   if (was.view === st.view && was.deckId === st.deckId && was.pileTab === st.pileTab && was.extendId === st.extendId) return;
@@ -795,11 +799,13 @@ function setFocus(on) {
   window.scrollTo({ top: 0 });
 }
 const inFocus = () => document.body.classList.contains("focus");
-document.addEventListener("pointerup", (e) => {
-  if (!inFocus() || e.target.closest("#fs-exit") || document.fullscreenElement || document.webkitFullscreenElement) return;
+/* Browsers only allow full screen right after a tap or key press, so a deck that opened by itself goes full screen on the first one. */
+function goFullOnGesture(e) {
+  if (!inFocus() || (e.target.closest && e.target.closest("#fs-exit")) || e.key === "Escape" || document.fullscreenElement || document.webkitFullscreenElement) return;
   const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
   try { const r = req && req.call(el, { navigationUI: "hide" }); if (r && r.catch) r.catch(() => {}); } catch {}
-}, true);
+}
+["pointerdown", "touchend", "keydown"].forEach((ev) => document.addEventListener(ev, goFullOnGesture, true));
 ["fullscreenchange", "webkitfullscreenchange"].forEach((ev) => document.addEventListener(ev, () => {
   if (!(document.fullscreenElement || document.webkitFullscreenElement) && inFocus()) setFocus(false);
 }));
@@ -920,7 +926,6 @@ function renderPlay() {
       <div class="card"><div class="empty"><h3>Nice work! Sign up to keep going</h3>
         <p>You've played your ${ANON_FREE} free questions. Create a free account to save your Learned and Repeat piles and keep playing this deck and every free deck.</p>
         <div class="next-row" style="justify-content:center"><button class="btn primary" data-act="signin">Sign up free</button></div></div></div>${sessionHTML()}`;
-    if (inFocus()) setFocus(false);
     if (!S.gateShown) { S.gateShown = true; askSignUp(); }
     return;
   }

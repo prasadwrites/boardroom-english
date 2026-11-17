@@ -40,7 +40,7 @@
     ],
     "headers": [
       {
-        "source": "/index.html",
+        "source": "**/*.@(html|js|webmanifest)",
         "headers": [
           {
             "key": "Cache-Control",
@@ -49,25 +49,7 @@
         ]
       },
       {
-        "source": "/auth.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache"
-          }
-        ]
-      },
-      {
-        "source": "/admin.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache"
-          }
-        ]
-      },
-      {
-        "source": "/admin.html",
+        "source": "/",
         "headers": [
           {
             "key": "Cache-Control",
