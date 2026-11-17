@@ -106,9 +106,9 @@ async function main() {
     const reqs = info && info.openRequests ? `<span class="count-badge" title="${info.openRequests} open request${info.openRequests > 1 ? "s" : ""}">${info.openRequests}</span>` : "";
     const tier = info ? (admin ? "Admin" : info.premium ? "Premium" : "Free") : "";
     accountEl.innerHTML = `${admin ? `<a class="btn admin-link" href="/admin.html${info && info.openRequests ? "#requests" : ""}">Admin${reqs}</a>` : ""}`
-      + `${info && !admin && !info.premium ? `<button class="btn premium-btn" type="button" data-act="premium">Go Premium</button>` : ""}`
+      + `${info && !admin && !info.premium ? `<button class="btn premium-btn" type="button" data-act="premium"><span class="long">Go </span>Premium</button>` : ""}`
       + `<span class="who">${esc(user.email || user.displayName || "Signed in")}${tier ? ` · ${esc(tier)}` : ""}</span>`
-      + `<button class="btn ghost" type="button" data-auth="signout">Sign out</button>`;
+      + `<button class="btn ghost" type="button" data-auth="signout" title="Signed in as ${esc(user.email || "")}">Sign out</button>`;
   }
   // Decks the admin made public or assigned to this account.
   async function loadShared(user) {

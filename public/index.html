@@ -359,6 +359,41 @@ button.chip:hover { border-color: var(--accent); }
   .card.enter { animation: deal .22s ease-out; }
   @keyframes deal { from { transform: translateY(6px); opacity: .6; } to { transform: none; opacity: 1; } }
 }
+
+/* Phones: one tidy row for the top bar and a compact play header. */
+.fs-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: .8rem; flex: none; }
+.fs-btn svg { width: 14px; height: 14px; }
+.crumbs h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 560px) {
+  .top { flex-wrap: nowrap; padding-block: 12px 10px; gap: 8px; }
+  .brand h1 { font-size: 1.12rem; white-space: nowrap; }
+  .top-right { flex-wrap: nowrap; gap: 6px; }
+  .top-right .sync, #account .who { display: none; }
+  #account { gap: 6px; flex-wrap: nowrap; }
+  #account .btn { padding: 5px 9px; font-size: .78rem; white-space: nowrap; }
+  #account .premium-btn .long { display: none; }
+  .bar-row#play-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; margin-bottom: 12px; }
+  #play-head .crumbs { gap: 8px; }
+  #play-head .crumbs .link { font-size: .85rem; white-space: nowrap; }
+  #play-head .crumbs h2 { font-size: 1.02rem; }
+  #play-head .piles { grid-column: 1 / -1; flex-wrap: nowrap; gap: 6px; }
+  #play-head .chip { padding: 4px 10px; font-size: .76rem; flex: 1 1 0; justify-content: center; white-space: nowrap; }
+  .fs-btn .lbl { display: none; }
+  .sw-actions { margin-top: 12px; }
+  .hint.center { display: none; }
+}
+@media (min-width: 561px) { #play-head .fs-btn { order: 3; } }
+
+/* Full-screen play: only the card is on screen, with a small button to leave. */
+.fs-exit { display: none; }
+body.focus .top, body.focus #play-head, body.focus .session, body.focus .hint, body.focus .sw-actions, body.focus .next-row .hint { display: none !important; }
+body.focus .wrap { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; justify-content: center;
+  padding-block: calc(12px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)); }
+body.focus #app { width: 100%; }
+body.focus .face { min-height: min(600px, calc(100dvh - 40px)); }
+body.focus .fs-exit { display: grid; place-items: center; position: fixed; z-index: 40; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px));
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); box-shadow: var(--shadow); font-size: 1.3rem; line-height: 1; opacity: .85; }
+body.focus .fs-exit:hover { opacity: 1; }
 </style>
 
 <div class="wrap">
@@ -368,6 +403,7 @@ button.chip:hover { border-color: var(--accent); }
   </header>
   <main id="app"></main>
 </div>
+<button class="fs-exit" id="fs-exit" type="button" data-act="unfocus" aria-label="Leave full screen" title="Leave full screen">×</button>
 <div id="toast" hidden></div>
 <div id="fx" aria-hidden="true"></div>
 <dialog class="modal" id="premium-dlg" aria-labelledby="premium-title"><form method="dialog">
@@ -742,8 +778,24 @@ const sessionHTML = () => {
 };
 
 /* ---------- render ---------- */
+/* Full-screen play hides everything but the card. It uses the browser's full screen where it can (not on iPhone), and the × button, Esc or leaving play turns it off. */
+function setFocus(on) {
+  on = !!on && S.view === "play";
+  document.body.classList.toggle("focus", on);
+  const d = document, el = d.documentElement, fsEl = d.fullscreenElement || d.webkitFullscreenElement;
+  try {
+    if (on && !fsEl) { const req = el.requestFullscreen || el.webkitRequestFullscreen; if (req) { const r = req.call(el, { navigationUI: "hide" }); if (r && r.catch) r.catch(() => {}); } }
+    if (!on && fsEl) { const ex = d.exitFullscreen || d.webkitExitFullscreen; if (ex) { const r = ex.call(d); if (r && r.catch) r.catch(() => {}); } }
+  } catch {}
+  window.scrollTo({ top: 0 });
+}
+const inFocus = () => document.body.classList.contains("focus");
+["fullscreenchange", "webkitfullscreenchange"].forEach((ev) => document.addEventListener(ev, () => {
+  if (!(document.fullscreenElement || document.webkitFullscreenElement) && inFocus()) setFocus(false);
+}));
 function render() {
   const app = $("#app");
+  if (S.view !== "play" && inFocus()) setFocus(false);
   if (S.view === "play") return renderPlay();
   if (S.view === "piles") return renderPiles();
   if (S.view === "create") return renderCreate();
@@ -841,6 +893,7 @@ function pips(s) {
 function playHeaderHTML(deck) {
   const c = counts(deck);
   return `<div class="crumbs"><button class="link" data-act="home">← Decks</button><h2>${esc(deck.name)}</h2></div>
+    <button class="btn fs-btn" data-act="focus" aria-label="Play full screen" title="Play full screen"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg><span class="lbl">Full screen</span></button>
     <div class="piles">
       <span class="chip"><b>${c.active}</b> in play</span>
       <button class="chip rep" data-act="piles" data-id="${deck.id}" data-tab="repeat"><b>${c.rep}</b> Repeat</button>
@@ -857,6 +910,7 @@ function renderPlay() {
       <div class="card"><div class="empty"><h3>Nice work! Sign up to keep going</h3>
         <p>You've played your ${ANON_FREE} free questions. Create a free account to save your Learned and Repeat piles and keep playing this deck and every free deck.</p>
         <div class="next-row" style="justify-content:center"><button class="btn primary" data-act="signin">Sign up free</button></div></div></div>${sessionHTML()}`;
+    if (inFocus()) setFocus(false);
     if (!S.gateShown) { S.gateShown = true; askSignUp(); }
     return;
   }
@@ -1333,6 +1387,8 @@ async function startGeneration(form) {
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const { act, id } = b.dataset;
+  if (act === "focus") return setFocus(true);
+  if (act === "unfocus") return setFocus(false);
   if (act === "home") return go("home", { confirmDelete: null });
   if (act === "create") return go("create", { extendId: null, gen: S.gen && S.gen.running ? S.gen : null });
   if (act === "extend") return go("create", { extendId: id, gen: S.gen && S.gen.running ? S.gen : null });
@@ -1399,6 +1455,7 @@ document.addEventListener("submit", (e) => {
   startGeneration({ name: val("f-name") || "My deck", focus: val("f-focus"), level: val("f-level"), style: val("f-style"), industry, format, kinds: format === "swipe" ? kinds : undefined, count, extendId: S.extendId, raw });
 });
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && inFocus()) { e.preventDefault(); return setFocus(false); }
   if (S.view !== "play" || !S.cur || e.metaKey || e.ctrlKey || e.altKey) return;
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName)) return;
   if (isSwipe(getDeck(S.deckId))) {
