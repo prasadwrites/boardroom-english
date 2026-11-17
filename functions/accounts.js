@@ -65,7 +65,7 @@ export function summary(a, user) {
     email: a.email, plan: a.plan in PLANS ? a.plan : "free", planLabel: plan.label,
     maxDecks: plan.decks, maxQuestions: plan.questions, decksUsed: Object.keys(decks).length, decks,
     needsCode: !!a.code, suspended: !!a.suspended, isAdmin: user ? isAdmin(user) : false,
-    uid: user ? user.uid : undefined, defaultDeck: a.defaultDeck || "",
+    uid: user ? user.uid : undefined, defaultDeck: a.defaultDeck || "", premium: !!a.premium,
   };
 }
 
@@ -119,18 +119,23 @@ export async function deleteDeck(user, deckId) {
 }
 
 // ---------- sharing ----------
-// The admin can share any account's deck: a copy goes to shared/{ownerUid~deckId}, readable by everyone signed in (public)
-// or by the listed accounts (assignees). See firestore.rules.
+// The admin can share any account's deck. shared/{ownerUid~deckId} holds what the deck is and who sees it (public, premium,
+// assignees); the cards themselves are in shared/{sid}/content/deck, which only people allowed to play it can read.
+// The landing deck (one at most) is also copied to config/landing, which visitors can read without signing in. See firestore.rules.
 export const sharedId = (ownerUid, deckId) => `${ownerUid}~${deckId}`;
-const BUILTIN_DECKS = new Set(["b-phrases", "b-vocab", "b-meetings"]);
+const BUILTIN_DECKS = { "b-phrases": 25, "b-vocab": 25, "b-meetings": 20 };
+export const LANDING_MIN = 15;
 const snapshot = (v) => ({
   id: v.id, name: v.name || "Deck", focus: v.focus || "", level: v.level || "", style: v.style || "", color: v.color || "",
   format: v.format === "swipe" ? "swipe" : "quiz", industry: v.industry || "", questions: v.questions,
 });
+const meta = (v) => ({ name: v.name || "Deck", focus: v.focus || "", level: v.level || "", format: v.format === "swipe" ? "swipe" : "quiz", industry: v.industry || "", color: v.color || "", cards: v.questions.length });
+const sharedCards = (s) => (s ? (typeof s.cards === "number" ? s.cards : s.deck ? s.deck.questions.length : 0) : 0);
 
 export async function listDecks() {
   const shares = {};
   (await db.collection("shared").get()).docs.forEach((d) => (shares[d.id] = d.data()));
+  const landing = ((await db.doc("config/landing").get()).data() || {}).sid || "";
   const decks = [];
   (await db.collectionGroup("items").get()).docs.forEach((d) => {
     const owner = d.ref.parent.parent;
@@ -139,38 +144,120 @@ export async function listDecks() {
     if (!v || !Array.isArray(v.questions) || !DECK_ID.test(String(v.id))) return;
     const sid = sharedId(owner.id, v.id), s = shares[sid];
     decks.push({
-      sid, ownerUid: owner.id, deckId: v.id, name: v.name || "Deck", focus: v.focus || "", level: v.level || "",
-      format: v.format === "swipe" ? "swipe" : "quiz", industry: v.industry || "", cards: v.questions.length, createdAt: v.createdAt || 0,
-      public: !!(s && s.public), assignees: (s && s.assignees) || [], shared: !!s, sharedCards: s && s.deck ? s.deck.questions.length : 0,
+      sid, ownerUid: owner.id, deckId: v.id, ...meta(v), createdAt: v.createdAt || 0,
+      public: !!(s && s.public), premium: !!(s && s.premium), landing: sid === landing,
+      assignees: (s && s.assignees) || [], shared: !!s, sharedCards: sharedCards(s),
     });
   });
   return decks.sort((a, b) => b.createdAt - a.createdAt);
 }
 
-// Sets who can see a deck. Saving also refreshes the shared copy from the owner's current deck.
-export async function shareDeck(ownerUid, deckId, { public: isPublic, assignees } = {}) {
+// Sets who can see a deck, whether it's premium, and whether it's the landing deck. Saving also refreshes the shared copy.
+export async function shareDeck(ownerUid, deckId, { public: isPublic, premium, landing, assignees } = {}) {
   if (typeof ownerUid !== "string" || !ownerUid || !DECK_ID.test(String(deckId))) throw new HttpError(400, "bad_request");
   const v = (await db.doc(`users/${ownerUid}/items/deck-${deckId}`).get()).data();
   if (!v || !Array.isArray(v.questions)) throw new HttpError(404, "not_found");
+  const sid = sharedId(ownerUid, deckId);
   const people = [...new Set((Array.isArray(assignees) ? assignees : []).filter((u) => typeof u === "string" && u && u.length <= 128))].slice(0, 2000);
-  const ref = db.collection("shared").doc(sharedId(ownerUid, deckId));
-  if (!isPublic && !people.length) return ref.delete();
-  await ref.set({ ownerUid, deckId, public: !!isPublic, assignees: people, deck: snapshot(v), updatedAt: Date.now() });
+  const landingRef = db.doc("config/landing");
+  const wasLanding = ((await landingRef.get()).data() || {}).sid === sid;
+  if (landing) {
+    if (v.questions.length < LANDING_MIN) throw new HttpError(400, "landing_too_small", { min: LANDING_MIN });
+    isPublic = true; premium = false; // visitors play it for free, and so does everyone after signing in
+  }
+  const ref = db.collection("shared").doc(sid);
+  if (!isPublic && !people.length) {
+    if (wasLanding) await landingRef.delete();
+    await ref.collection("content").doc("deck").delete();
+    return ref.delete();
+  }
+  const batch = db.batch();
+  batch.set(ref, { ownerUid, deckId, public: !!isPublic, premium: !!premium, assignees: people, ...meta(v), updatedAt: Date.now() });
+  batch.set(ref.collection("content").doc("deck"), { deck: snapshot(v), updatedAt: Date.now() });
+  if (landing) batch.set(landingRef, { sid, ownerUid, deckId, deck: snapshot(v), updatedAt: Date.now() });
+  else if (wasLanding) batch.delete(landingRef);
+  await batch.commit();
 }
 
 // A user's default deck is "builtin:<id>", a shared deck id (ownerUid~deckId) or "" for none.
 async function checkDefault(uid, value) {
   if (!value) return "";
   if (typeof value !== "string") throw new HttpError(400, "bad_request");
-  if (value.startsWith("builtin:")) { if (!BUILTIN_DECKS.has(value.slice(8))) throw new HttpError(400, "bad_deck"); return value; }
+  if (value.startsWith("builtin:")) { if (!(value.slice(8) in BUILTIN_DECKS)) throw new HttpError(400, "bad_deck"); return value; }
   const [ownerUid, deckId] = value.split("~");
   const ref = db.collection("shared").doc(sharedId(ownerUid, deckId));
   const snap = await ref.get();
-  if (snap.exists) {
+  if (snap.exists && snap.data().deck === undefined) {
     const s = snap.data();
     if (!s.public && !(s.assignees || []).includes(uid)) await ref.update({ assignees: FieldValue.arrayUnion(uid) });
-  } else await shareDeck(ownerUid, deckId, { public: false, assignees: [uid] });
+  } else {
+    const s = snap.exists ? snap.data() : {};
+    await shareDeck(ownerUid, deckId, { public: !!s.public, premium: !!s.premium, assignees: [...new Set([...(s.assignees || []), uid])] });
+  }
   return sharedId(ownerUid, deckId);
+}
+
+// ---------- requests to the admin ----------
+// requests/{id}: {type: "premium" | "decks", uid, email, message, status: "open" | "done" | "dismissed", createdAt}.
+// The admin sees open ones on the admin page and as a count on the Admin link.
+export async function openRequests() { return (await db.collection("requests").where("status", "==", "open").get()).size; }
+
+export async function requestPremium(user) {
+  const a = await getAccount(user);
+  if (a.suspended) throw new HttpError(403, "suspended");
+  if (a.premium) return { ok: true, already: true };
+  const open = await db.collection("requests").where("uid", "==", user.uid).where("status", "==", "open").get();
+  const mine = open.docs.find((d) => d.data().type === "premium");
+  if (mine) { await mine.ref.update({ createdAt: Date.now() }); return { ok: true }; }
+  await db.collection("requests").add({ type: "premium", uid: user.uid, email: user.email || "", message: "", status: "open", createdAt: Date.now() });
+  return { ok: true };
+}
+
+// Share of all the cards this person can play that are in their Learned pile.
+export async function learnedShare(user, account) {
+  const premium = !!account.premium;
+  const sizes = { ...BUILTIN_DECKS };
+  const col = db.collection("shared");
+  const [pub, mine, items] = await Promise.all([col.where("public", "==", true).get(), col.where("assignees", "array-contains", user.uid).get(), db.collection(`users/${user.uid}/items`).get()]);
+  [...pub.docs, ...mine.docs].forEach((d) => {
+    const s = d.data();
+    if (s.premium && !premium && !(s.assignees || []).includes(user.uid)) return;
+    sizes["sh-" + d.id] = sharedCards(s);
+  });
+  const progress = {};
+  items.docs.forEach((d) => {
+    const v = d.data() || {};
+    if (d.id.startsWith("deck-") && Array.isArray(v.questions) && v.id) sizes[v.id] = v.questions.length;
+    else if (d.id.startsWith("prog-")) progress[d.id.slice(5)] = v.cards || {};
+  });
+  let total = 0, learned = 0;
+  for (const [id, n] of Object.entries(sizes)) {
+    total += n;
+    learned += Math.min(n, Object.values(progress[id] || {}).filter((p) => p && p.l).length);
+  }
+  return { total, learned, share: total ? learned / total : 0 };
+}
+
+export async function requestDecks(user, message) {
+  const a = await getAccount(user);
+  if (a.suspended) throw new HttpError(403, "suspended");
+  const { share } = await learnedShare(user, a);
+  if (share < 0.8) throw new HttpError(403, "not_enough_learned", { share });
+  const open = await db.collection("requests").where("uid", "==", user.uid).where("status", "==", "open").get();
+  if (open.docs.some((d) => d.data().type === "decks")) throw new HttpError(409, "already_requested");
+  await db.collection("requests").add({ type: "decks", uid: user.uid, email: user.email || "", message: String(message || "").trim().slice(0, 500), share, status: "open", createdAt: Date.now() });
+  return { ok: true };
+}
+
+export async function listRequests() {
+  const snap = await db.collection("requests").orderBy("createdAt", "desc").limit(200).get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+export async function closeRequest(id, status) {
+  if (typeof id !== "string" || !id || !["done", "dismissed", "open"].includes(status)) throw new HttpError(400, "bad_request");
+  const ref = db.collection("requests").doc(id);
+  if (!(await ref.get()).exists) throw new HttpError(404, "not_found");
+  await ref.update({ status, closedAt: Date.now() });
 }
 
 // ---------- admin ----------
@@ -193,7 +280,7 @@ export async function listAccounts() {
       created: u.metadata.creationTime || "", lastSignIn: u.metadata.lastSignInTime || "",
       plan: a.plan in PLANS ? a.plan : "free", code: a.code || "", suspended: !!(a.suspended || u.disabled),
       decksUsed: Object.keys(decks).length, questionsUsed: Object.values(decks).reduce((s, n) => s + (n || 0), 0),
-      isAdmin: u.email === ADMIN_EMAIL && u.emailVerified, defaultDeck: a.defaultDeck || "",
+      isAdmin: u.email === ADMIN_EMAIL && u.emailVerified, defaultDeck: a.defaultDeck || "", premium: !!a.premium,
     };
   }).sort((x, y) => (y.lastSignIn ? Date.parse(y.lastSignIn) : 0) - (x.lastSignIn ? Date.parse(x.lastSignIn) : 0));
 }
@@ -212,6 +299,7 @@ export async function updateAccount(admin, uid, changes) {
     if (uid === admin.uid) throw new HttpError(400, "cant_suspend_self");
     patch.suspended = !!changes.suspended;
   }
+  if ("premium" in changes) patch.premium = !!changes.premium;
   if ("defaultDeck" in changes) patch.defaultDeck = await checkDefault(uid, changes.defaultDeck);
   // Make sure the account doc exists (seeded from the user's decks) before patching it.
   await getAccount({ uid, email: target.email, email_verified: target.emailVerified });

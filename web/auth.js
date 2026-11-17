@@ -5,7 +5,7 @@ import {
   getAuth, connectAuthEmulator, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword,
   createUserWithEmailAndPassword, sendPasswordResetEmail, signOut,
 } from "firebase/auth";
-import { initializeFirestore, connectFirestoreEmulator, collection, doc, getDocs, setDoc, deleteDoc, query, where } from "firebase/firestore";
+import { initializeFirestore, connectFirestoreEmulator, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where } from "firebase/firestore";
 
 const $ = (s, el = document) => el.querySelector(s);
 // `firebase emulators:start` serves the site on localhost; use the local Auth and Firestore emulators there.
@@ -48,7 +48,7 @@ function buildDialog() {
     <form method="dialog" novalidate>
       <button class="close" type="button" data-auth="close" aria-label="Close">×</button>
       <h2 id="signin-title">Sign in to keep your decks</h2>
-      <p>Your decks and your Repeat and Learned piles are saved to your account, so they're there on any device.</p>
+      <p id="signin-text">Your decks and your Repeat and Learned piles are saved to your account, so they're there on any device.</p>
       <button class="btn google" type="button" data-auth="google">
         <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
         Continue with Google
@@ -92,7 +92,7 @@ async function main() {
   async function api(path, opts = {}) {
     const user = auth.currentUser; if (!user) return null;
     const res = await fetch("/api/account" + path, { ...opts, headers: { ...(opts.headers || {}), Authorization: "Bearer " + (await user.getIdToken()) } });
-    if (!res.ok) throw Object.assign(new Error("account api " + res.status), { status: res.status });
+    if (!res.ok) { const j = await res.json().catch(() => ({})); throw Object.assign(new Error("account api " + res.status), { status: res.status, code: j.error, ...j }); }
     return res.json();
   }
   async function refreshAccount() {
@@ -103,8 +103,11 @@ async function main() {
     if (!user) { accountEl.innerHTML = `<button class="btn primary" type="button" data-auth="open">Sign in</button>`; return; }
     // Show the Admin link straight away for the admin's verified address; the server still checks every admin request.
     const admin = (info && info.isAdmin) || (user.email === ADMIN_EMAIL && user.emailVerified);
-    accountEl.innerHTML = `${admin ? `<a class="btn" href="/admin.html">Admin</a>` : ""}`
-      + `<span class="who">${esc(user.email || user.displayName || "Signed in")}${info ? ` · ${esc(info.planLabel)}` : ""}</span>`
+    const reqs = info && info.openRequests ? `<span class="count-badge" title="${info.openRequests} open request${info.openRequests > 1 ? "s" : ""}">${info.openRequests}</span>` : "";
+    const tier = info ? (admin ? "Admin" : info.premium ? "Premium" : "Free") : "";
+    accountEl.innerHTML = `${admin ? `<a class="btn admin-link" href="/admin.html${info && info.openRequests ? "#requests" : ""}">Admin${reqs}</a>` : ""}`
+      + `${info && !admin && !info.premium ? `<button class="btn premium-btn" type="button" data-act="premium">Go Premium</button>` : ""}`
+      + `<span class="who">${esc(user.email || user.displayName || "Signed in")}${tier ? ` · ${esc(tier)}` : ""}</span>`
       + `<button class="btn ghost" type="button" data-auth="signout">Sign out</button>`;
   }
   // Decks the admin made public or assigned to this account.
@@ -114,13 +117,26 @@ async function main() {
       const [pub, mine] = await Promise.all([getDocs(query(col, where("public", "==", true))), getDocs(query(col, where("assignees", "array-contains", user.uid)))]);
       const all = {};
       [...pub.docs, ...mine.docs].forEach((d) => (all[d.id] = { sid: d.id, ...d.data() }));
+      // The cards are readable only when this account may play the deck; a premium deck it can't play shows locked.
+      await Promise.all(Object.values(all).map(async (v) => {
+        if (v.deck) return;
+        try { const c = await getDoc(doc(fs, "shared", v.sid, "content", "deck")); if (c.exists()) v.deck = c.data().deck; else v.locked = true; }
+        catch { v.locked = true; }
+      }));
       if (auth.currentUser && auth.currentUser.uid === user.uid) window.boardroom.setShared(Object.values(all));
     } catch (e) { console.warn("Couldn't load shared decks", e); }
   }
   Object.assign(window.boardroom, {
     getToken: () => (auth.currentUser ? auth.currentUser.getIdToken() : Promise.resolve(null)),
-    openSignIn: () => { say(""); dlg.showModal(); email.focus(); },
+    openSignIn: (opts = {}) => {
+      say("");
+      $("#signin-title", dlg).textContent = opts.title || "Sign in to keep your decks";
+      $("#signin-text", dlg).textContent = opts.text || "Your decks and your Repeat and Learned piles are saved to your account, so they're there on any device.";
+      dlg.showModal(); email.focus();
+    },
+    api: (path, body) => api(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
     refreshAccount,
+    reloadShared: () => auth.currentUser && loadShared(auth.currentUser),
     deleteDeck: (deckId) => api("/delete-deck", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deckId }) })
       .then((info) => info && window.boardroom.setAccount(info)).catch((e) => console.warn("Couldn't free the deck on the server", e)),
   });
@@ -161,6 +177,7 @@ async function main() {
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       if (dlg.open) dlg.close();
+      window.boardroom.setSignedIn(true);
       renderAccount(user, null);
       refreshAccount();
       if (attachedUid === user.uid) return;
@@ -172,6 +189,10 @@ async function main() {
       renderAccount(null);
       window.boardroom.setAccount(null);
       window.boardroom.setShared([]);
+      // Visitors who aren't signed in get the landing deck, if the admin set one.
+      getDoc(doc(fs, "config", "landing")).then((d) => window.boardroom.setLanding(d.exists() ? d.data() : null))
+        .catch((e) => { console.warn("Couldn't load the landing deck", e); window.boardroom.setLanding(null); });
+      window.boardroom.setSignedIn(false);
       if (attachedUid) { attachedUid = null; window.boardroom.detachStore(); }
     }
   });

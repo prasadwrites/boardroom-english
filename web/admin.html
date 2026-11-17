@@ -54,6 +54,11 @@ h2 { font-size: 1.2rem; margin: 8px 0 4px; }
 .acct { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) auto; }
 .deck-row { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.2fr) auto; }
 .badge.swipe { background: #EDE4FF; color: #4B2F8F; }
+.badge.premium { background: linear-gradient(120deg, #F6D365, #FDA085); color: #4A2600; }
+.badge.landing { background: var(--mark); color: #2A2100; }
+.count-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 999px; background: var(--bad); color: #fff; font-size: .7rem; font-weight: 700; }
+.req-row { grid-template-columns: minmax(0, 1fr) auto; }
+.req-row .act { display: flex; gap: 8px; flex-wrap: wrap; }
 .badge.pub { background: var(--good-bg); color: var(--good); }
 .meta.warn { color: var(--bad); }
 .field > label:has(input[type="checkbox"]) { text-transform: none; letter-spacing: 0; font-size: .88rem; color: var(--ink); font-weight: 500; display: flex; gap: 8px; align-items: center; }

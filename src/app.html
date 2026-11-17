@@ -276,6 +276,33 @@ button.chip:hover { border-color: var(--accent); }
   .sw.enter .face.back { animation: none; }
 }
 
+/* Visitors, premium and requests */
+.hero { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 22px; margin-bottom: 18px; display: grid; gap: 10px; position: relative; overflow: hidden; }
+.hero::after { content: ""; position: absolute; right: -60px; top: -60px; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--mark) 55%, transparent), transparent 70%); pointer-events: none; }
+.hero h2 { font-size: clamp(1.4rem, 4vw, 1.9rem); }
+.hero p { margin: 0; color: var(--muted); max-width: 60ch; }
+.hero .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.badge.premium, .premium-btn { background: linear-gradient(120deg, #F6D365, #FDA085); color: #4A2600; border-color: transparent; }
+.premium-btn { font-weight: 700; }
+.deck.locked .focus, .deck.locked h3 { opacity: .75; }
+.lock-line { font-size: .82rem; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.count-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 999px; background: var(--bad); color: #fff; font-size: .7rem; font-weight: 700; vertical-align: 1px; }
+.learned-banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); padding: 12px 16px; margin-bottom: 16px; }
+.learned-banner .meter { flex: 1 1 160px; height: 8px; border-radius: 4px; background: var(--rule); overflow: hidden; max-width: 260px; }
+.learned-banner .meter i { display: block; height: 100%; background: var(--good); }
+.learned-banner p { margin: 0; font-size: .9rem; }
+.free-left { font-weight: 700; color: var(--accent); }
+.modal { border: 0; border-radius: 14px; padding: 0; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); width: min(420px, calc(100% - 32px)); }
+.modal::backdrop { background: rgba(13,21,32,.45); }
+.modal form { display: grid; gap: 14px; padding: 22px; }
+.modal h2 { font-size: 1.3rem; }
+.modal p, .modal li { margin: 0; color: var(--muted); font-size: .9rem; }
+.modal ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.modal textarea { border: 1.5px solid var(--line); border-radius: 8px; padding: 9px 11px; background: var(--surface); min-height: 80px; }
+.modal .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.sq-pay { display: block; text-align: center; font-size: 18px; line-height: 48px; height: 48px; color: #fff; background: #006aff; border-radius: 6px; text-decoration: none; font-weight: 600; box-shadow: 0 0 0 1px rgba(0,0,0,.1) inset; }
+.sq-pay:hover { background: #0057d6; }
+
 /* Motion: the page moves only when something happens, and not at all with reduced motion. */
 .streak { display: inline-block; margin-left: 8px; padding: 1px 9px; border-radius: 999px; font-weight: 700; color: #7A3B00; background: linear-gradient(90deg, #FFD94A, #FFA94A); }
 #fx { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
@@ -334,6 +361,20 @@ button.chip:hover { border-color: var(--accent); }
 </div>
 <div id="toast" hidden></div>
 <div id="fx" aria-hidden="true"></div>
+<dialog class="modal" id="premium-dlg" aria-labelledby="premium-title"><form method="dialog">
+  <h2 id="premium-title">Go Premium</h2>
+  <p>Premium opens every premium deck the admin publishes, on top of the free ones.</p>
+  <ul><li>All premium quiz and swipe decks</li><li>New premium decks as they're added</li><li>Your Repeat and Learned piles on any device</li></ul>
+  <a class="sq-pay" id="sq-pay" target="_blank" rel="noopener" href="https://square.link/u/V5WnbmLG?src=embed" data-url="https://square.link/u/V5WnbmLG?src=embd">Pay now</a>
+  <p>Payment is handled by Square. Once you've paid, the admin is notified and switches your account to Premium.</p>
+  <div class="row"><button class="btn ghost" value="close">Not now</button></div>
+</form></dialog>
+<dialog class="modal" id="more-dlg" aria-labelledby="more-title"><form method="dialog" id="more-form">
+  <h2 id="more-title">Ask for more decks</h2>
+  <p>You've learned most of your cards. Tell the admin what you'd like to practise next.</p>
+  <textarea id="more-msg" maxlength="500" placeholder="e.g. More idioms for negotiations in finance"></textarea>
+  <div class="row"><button class="btn ghost" value="close" formnovalidate>Cancel</button><button class="btn primary" type="submit" value="send">Send request</button></div>
+</form></dialog>
 
 <script>
 const LEARN_AT = 5;
@@ -494,7 +535,9 @@ function detachStore() {
 function refresh() { if (S.view !== "play" || (S.cur && S.cur.picked != null)) render(); else renderPlayHeader(); }
 /* The site's sign-in script reports the account's plan and usage here (null when signed out). */
 function setAccount(info) {
+  const was = S.account;
   S.account = info;
+  if (was && info && was.premium !== info.premium && window.boardroom.reloadShared) window.boardroom.reloadShared();
   if (S.view === "create" && !(S.gen && S.gen.running)) renderCreate(); else if (S.view === "home") render();
   openDefaultOnce();
 }
@@ -502,9 +545,10 @@ function setAccount(info) {
 function setShared(list) {
   S.shared = {};
   for (const v of list || []) {
-    if (!v || !v.deck || !Array.isArray(v.deck.questions)) continue;
-    const id = "sh-" + v.sid;
-    S.shared[id] = { ...v.deck, id, srcId: v.deckId, owner: v.ownerUid, shared: true, public: !!v.public, createdAt: v.updatedAt || 0 };
+    if (!v) continue;
+    const id = "sh-" + v.sid, base = { id, srcId: v.deckId, owner: v.ownerUid, shared: true, public: !!v.public, premium: !!v.premium, createdAt: v.updatedAt || 0 };
+    if (v.deck && Array.isArray(v.deck.questions)) S.shared[id] = { ...v.deck, ...base };
+    else if (v.locked) S.shared[id] = { name: v.name, focus: v.focus, level: v.level, format: v.format, industry: v.industry, color: v.color, questions: [], cards: v.cards || 0, locked: true, ...base };
   }
   if (S.view === "home") render();
   openDefaultOnce();
@@ -522,7 +566,52 @@ function openDefaultOnce() {
   S.cur = null; S.recent = []; S.session = { n: 0, ok: 0, streak: 0 };
   go("play", { deckId: id });
 }
-window.boardroom = { attachStore, detachStore, setAccount, setShared };
+/* Visitors who aren't signed in play the admin's landing deck: ${ANON_FREE} questions, then they sign up to keep going. */
+const ANON_FREE = 10, ANON_KEY = "boardroom-english.anon";
+const anon = () => !IN_CLAUDE && S.signedIn === false;
+const anonCount = () => { try { return Number(localStorage.getItem(ANON_KEY)) || 0; } catch { return 0; } };
+function anonTick() { if (!anon()) return; try { localStorage.setItem(ANON_KEY, String(anonCount() + 1)); } catch {} }
+function setSignedIn(v) {
+  const was = S.signedIn; S.signedIn = v;
+  if (v && S.gate) { S.gate = false; S.cur = null; }
+  if (was === v) return;
+  if (S.view === "play") renderPlay(); else if (S.view === "home") render();
+  if (!v) openLandingOnce();
+}
+function setLanding(data) {
+  S.landing = data && data.deck && Array.isArray(data.deck.questions)
+    ? { ...data.deck, id: "sh-" + data.sid, srcId: data.deckId, owner: data.ownerUid, shared: true, public: true, landing: true } : null;
+  if (S.view === "home") render();
+  openLandingOnce();
+}
+function openLandingOnce() {
+  if (!anon() || !S.landing || S.view !== "home") return;
+  try { if (sessionStorage.getItem("boardroom-english.landing") === "1") return; sessionStorage.setItem("boardroom-english.landing", "1"); } catch {}
+  S.cur = null; S.recent = []; S.session = { n: 0, ok: 0, streak: 0 };
+  go("play", { deckId: S.landing.id });
+}
+function askSignUp() {
+  if (window.boardroom.openSignIn) window.boardroom.openSignIn({ title: "Sign up to keep your piles", text: "Create a free account to save your Learned and Repeat piles and keep playing. You'll also get every free deck the admin publishes." });
+}
+/* Premium: Square takes the payment in a pop-up, and the admin is told so they can switch the account to Premium. */
+function openPremium() {
+  if (!S.signedIn) return askSignUp();
+  const d = $("#premium-dlg"); if (d && !d.open) d.showModal();
+}
+async function payNow(e) {
+  const a = e.currentTarget, url = a.dataset.url, w = 500, h = Math.round(innerHeight * .75);
+  const win = window.open(url, "Square Payment Links", `scrollbars=yes,width=${w},height=${h},top=${Math.round((innerHeight - h) / 2 + screenY)},left=${Math.round((innerWidth - w) / 2 + screenX)}`);
+  if (win) { e.preventDefault(); win.focus(); }
+  try { await window.boardroom.api("/premium-request", {}); toast("The admin has been told. Your account switches to Premium once the payment is confirmed."); }
+  catch (err) { console.warn("Couldn't record the premium request", err); }
+}
+/* Share of the cards you can play that are in your Learned piles; at 80% you can ask the admin for more decks. */
+function learnedTotals() {
+  let total = 0, learned = 0;
+  for (const d of allDecks()) { if (d.locked) continue; const c = counts(d); total += c.total; learned += c.lrn; }
+  return { total, learned, share: total ? learned / total : 0 };
+}
+window.boardroom = { attachStore, detachStore, setAccount, setShared, setSignedIn, setLanding };
 
 async function initCloud() {
   if (!window.claude || !window.claude.use) return;
@@ -576,6 +665,10 @@ function getGenerator() {
 /* ---------- state ---------- */
 const S = { account: null, shared: {}, createFormat: "quiz", view: "home", deckId: null, cur: null, recent: [], session: { n: 0, ok: 0 }, pileTab: "repeat", confirmDelete: null, gen: null, extendId: null };
 function allDecks() {
+  if (anon()) return S.landing ? [S.landing] : [];
+  return allDecksSignedIn();
+}
+function allDecksSignedIn() {
   const mine = Object.values(local.decks).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const me = S.account && S.account.uid;
   const shared = Object.values(S.shared).filter((d) => !(me && d.owner === me && local.decks[d.srcId])).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -584,7 +677,7 @@ function allDecks() {
   if (i > 0) all.unshift(all.splice(i, 1)[0]);
   return all;
 }
-const getDeck = (id) => BUILTINS.find((d) => d.id === id) || local.decks[id] || S.shared[id];
+const getDeck = (id) => BUILTINS.find((d) => d.id === id) || local.decks[id] || S.shared[id] || (S.landing && S.landing.id === id ? S.landing : undefined);
 const isSwipe = (deck) => deck && deck.format === "swipe";
 function prog(deckId) { return (local.progress[deckId] ||= {}); }
 function counts(deck) {
@@ -634,7 +727,10 @@ function bumpChips(deck) {
   if (c.rep > prev.rep) { const el = $(".chip.rep"); if (el) el.classList.add("bump"); }
   if (c.lrn > prev.lrn) { const el = $(".chip.lrn"); if (el) el.classList.add("bump"); }
 }
-const sessionHTML = () => S.session.n ? `<p class="session">This session: ${S.session.ok} of ${S.session.n} correct${S.session.streak >= 3 ? `<span class="streak">${S.session.streak} in a row</span>` : ""}</p>` : "";
+const sessionHTML = () => {
+  const left = anon() ? `<p class="session"><span class="free-left">${Math.max(0, ANON_FREE - anonCount())}</span> free questions left. <button class="link" data-act="signin">Sign up</button> to keep your piles.</p>` : "";
+  return (S.session.n ? `<p class="session">This session: ${S.session.ok} of ${S.session.n} correct${S.session.streak >= 3 ? `<span class="streak">${S.session.streak} in a row</span>` : ""}</p>` : "") + left;
+};
 
 /* ---------- render ---------- */
 function render() {
@@ -651,8 +747,24 @@ function deckColor(deck, i) { return deck.color || COLORS[i % COLORS.length]; }
 const canCreate = () => IN_CLAUDE || !!(S.account && S.account.isAdmin);
 function renderHome(app) {
   const decks = allDecks();
+  if (anon()) {
+    app.innerHTML = `<section class="hero">
+        <span class="eyebrow">Business English, spoken the way people really talk at work</span>
+        <h2>${S.landing ? `Try ${esc(S.landing.name)}, free` : "Sign in to start practising"}</h2>
+        <p>${S.landing ? `Play ${ANON_FREE} questions without an account. Sign up free to save your Learned and Repeat piles and unlock every free deck.` : "Create a free account to get the decks the admin publishes and keep your Learned and Repeat piles on any device."}</p>
+        <div class="row">${S.landing ? `<button class="btn primary" data-act="play" data-id="${S.landing.id}">Start playing</button>` : ""}<button class="btn ${S.landing ? "" : "primary"}" data-act="signin">Sign up or sign in</button></div>
+      </section>
+      ${decks.length ? `<div class="grid">${decks.map((d, i) => deckCard(d, i)).join("")}</div>` : ""}`;
+    return;
+  }
+  const lt = learnedTotals(), pct = Math.round(lt.share * 100);
+  const banner = !IN_CLAUDE && S.account && !S.account.isAdmin && lt.total ? `<div class="learned-banner">
+      <p><strong>${pct}% learned</strong> across your decks. ${pct >= 80 ? "You can ask the admin for more decks." : "At 80% you can ask the admin for more decks."}</p>
+      <span class="meter" aria-hidden="true"><i style="width:${pct}%"></i></span>
+      <button class="btn ${pct >= 80 ? "primary" : ""}" data-act="more" ${pct >= 80 ? "" : "disabled"}>Ask for more decks</button></div>` : "";
   app.innerHTML = `
-    ${canCreate() ? "" : `<p class="intro"><strong>Decks the admin shares with you appear here when you sign in.</strong></p>`}
+    ${banner}
+    ${canCreate() ? "" : `<p class="intro"><strong>Decks the admin shares with you appear here.</strong></p>`}
     <p class="intro">Pick a deck to practise. In a quiz deck, cards you miss go to your <strong>Repeat</strong> pile and a card you get right ${LEARN_AT} times in a row moves to <strong>Learned</strong>. In a swipe deck you flip cards to learn words, phrases and idioms, then swipe left when you know one and right to see it again.</p>
     <div class="grid">
       ${canCreate() ? `<button class="deck new-deck" type="button" data-act="create">
@@ -669,7 +781,18 @@ function deckCard(d, i) {
   const confirming = S.confirmDelete === d.id;
   const isDef = d.id === defaultDeckId();
   const badges = [isSwipe(d) ? `<span class="badge swipe">Swipe deck</span>` : "", isDef ? `<span class="badge def">Your default</span>` : "",
-    d.shared ? `<span class="badge shared">${d.public ? "Public" : "Shared with you"}</span>` : ""].join("");
+    d.premium ? `<span class="badge premium">Premium</span>` : "",
+    d.shared && !d.landing && !d.premium ? `<span class="badge shared">${d.public ? "Free" : "Shared with you"}</span>` : "",
+    d.landing && anon() ? `<span class="badge def">Free to try</span>` : ""].join("");
+  if (d.locked) return `<article class="deck locked" style="--deck-c:${deckColor(d, i)};--i:${i + 1}">
+    <span class="eyebrow">From the admin${d.level ? " · " + esc(d.level) : ""}${d.industry ? " · " + esc(d.industry) : ""}</span>
+    <div class="badges">${badges}</div>
+    <h3>${esc(d.name)}</h3>
+    <p class="focus">${esc(d.focus || "")}</p>
+    <div class="stats"><span><b>${d.cards}</b> ${isSwipe(d) ? "words" : "cards"}</span></div>
+    <p class="lock-line">Premium deck. Upgrade to play it.</p>
+    <div class="actions"><button class="btn premium-btn" data-act="premium">Unlock with Premium</button></div>
+  </article>`;
   return `<article class="deck" style="--deck-c:${deckColor(d, i)};--i:${i + 1}">
     <span class="eyebrow">${d.builtin ? "Starter deck" : d.shared ? "From the admin" : "Your deck"}${d.level ? " · " + esc(d.level) : ""}${d.industry ? " · " + esc(d.industry) : ""}</span>
     ${badges ? `<div class="badges">${badges}</div>` : ""}
@@ -680,7 +803,7 @@ function deckCard(d, i) {
     ${confirming ? `<div class="confirm"><span>Delete this deck and its progress?</span><button class="btn danger" data-act="del-yes" data-id="${d.id}">Delete</button><button class="btn ghost" data-act="del-no">Keep</button></div>` : `
     <div class="actions">
       <button class="btn primary" data-act="play" data-id="${d.id}" ${c.total ? "" : "disabled"}>Study</button>
-      <button class="btn" data-act="piles" data-id="${d.id}">Piles</button>
+      ${anon() ? "" : `<button class="btn" data-act="piles" data-id="${d.id}">Piles</button>`}
       ${d.builtin || d.shared ? "" : `${canCreate() ? `<button class="btn ghost" data-act="extend" data-id="${d.id}">${isSwipe(d) ? "Add cards" : "Add questions"}</button>` : ""}${canCreate() && !IN_CLAUDE ? `<a class="btn ghost" href="/admin.html#decks">Share</a>` : ""}<button class="btn ghost danger" data-act="del" data-id="${d.id}">Delete</button>`}
     </div>`}
   </article>`;
@@ -688,6 +811,7 @@ function deckCard(d, i) {
 
 /* Play */
 function nextCard(deck) {
+  if (anon() && anonCount() >= ANON_FREE) { S.gate = true; return null; }
   const P = prog(deck.id);
   const active = deck.questions.filter((q) => !(P[q.id] && P[q.id].l));
   if (!active.length) return null;
@@ -718,7 +842,15 @@ function renderPlayHeader() { const h = $("#play-head"); const deck = getDeck(S.
 function renderPlay() {
   const deck = getDeck(S.deckId);
   if (!deck) return go("home");
-  if (!S.cur) S.cur = nextCard(deck);
+  if (!S.cur && !(S.gate && anon())) S.cur = nextCard(deck);
+  if (S.gate && anon()) {
+    $("#app").innerHTML = `<div class="bar-row" id="play-head">${playHeaderHTML(deck)}</div>
+      <div class="card"><div class="empty"><h3>Nice work! Sign up to keep going</h3>
+        <p>You've played your ${ANON_FREE} free questions. Create a free account to save your Learned and Repeat piles and keep playing this deck and every free deck.</p>
+        <div class="next-row" style="justify-content:center"><button class="btn primary" data-act="signin">Sign up free</button></div></div></div>${sessionHTML()}`;
+    if (!S.gateShown) { S.gateShown = true; askSignUp(); }
+    return;
+  }
   if (isSwipe(deck)) return renderSwipe(deck);
   const app = $("#app");
   const cur = S.cur;
@@ -763,7 +895,7 @@ function pick(k) {
   else { p.w++; p.s = 0; p.r = true; }
   p.t = Date.now();
   S.session.n++; if (ok) S.session.ok++; S.session.streak = ok ? (S.session.streak || 0) + 1 : 0;
-  cur.just = true;
+  cur.just = true; anonTick();
   saveProgress(deck.id);
   renderPlay();
   if (ok) burstFrom($(".opt.right"), cur.learned ? 40 : 14, cur.learned ? 1.4 : .8);
@@ -827,7 +959,7 @@ function swipeAnswer(ok) {
   const p = (prog(deck.id)[q.id] ||= { s: 0, c: 0, w: 0, r: false, l: false });
   if (ok) p.c++; else p.w++;
   p.t = Date.now(); S.session.n++; if (ok) S.session.ok++; S.session.streak = ok ? (S.session.streak || 0) + 1 : 0;
-  S.cur.just = true;
+  S.cur.just = true; anonTick();
   saveProgress(deck.id); renderPlay();
   if (ok) burstFrom($("#sw .sw-verdict") || $("#sw"), 16, .9);
 }
@@ -849,6 +981,7 @@ function swipe(dir) {
   const deck = getDeck(S.deckId);
   const p = (prog(deck.id)[cur.q.id] ||= { s: 0, c: 0, w: 0, r: false, l: false });
   if (dir === "left") { p.l = true; p.r = false; } else { p.r = true; p.l = false; }
+  if (cur.picked == null && cur.typed == null) anonTick();
   p.t = Date.now(); saveProgress(deck.id);
   if (dir === "left") burstFrom($(".chip.lrn"), 14, .7);
   renderPlayHeader();
@@ -1194,6 +1327,7 @@ document.addEventListener("click", (e) => {
   if (act === "home") return go("home", { confirmDelete: null });
   if (act === "create") return go("create", { extendId: null, gen: S.gen && S.gen.running ? S.gen : null });
   if (act === "extend") return go("create", { extendId: id, gen: S.gen && S.gen.running ? S.gen : null });
+  if (act === "play" && getDeck(id) && getDeck(id).locked) return openPremium();
   if (act === "play") { if (S.deckId !== id) { S.cur = null; S.recent = []; S.session = { n: 0, ok: 0, streak: 0 }; } return go("play", { deckId: id }); }
   if (act === "piles") return go("piles", { deckId: id, pileTab: b.dataset.tab || "repeat" });
   if (act === "tab") { S.pileTab = b.dataset.tab; return renderPiles(); }
@@ -1216,12 +1350,24 @@ document.addEventListener("click", (e) => {
   if (act === "del") { S.confirmDelete = id; return render(); }
   if (act === "del-no") { S.confirmDelete = null; return render(); }
   if (act === "del-yes") { removeDeck(id); S.confirmDelete = null; toast("Deck deleted"); return render(); }
-  if (act === "signin") { if (window.boardroom.openSignIn) window.boardroom.openSignIn(); return; }
+  if (act === "signin") { if (anon()) return askSignUp(); if (window.boardroom.openSignIn) window.boardroom.openSignIn(); return; }
+  if (act === "premium") return openPremium();
+  if (act === "more") { const d = $("#more-dlg"); if (d && !d.open) { $("#more-msg").value = ""; d.showModal(); } return; }
   if (act === "idea") { const f = $("#f-focus"); f.value = b.dataset.v; const n = $("#f-name"); if (n && !n.value) n.value = b.dataset.v.split(" ").slice(0, 3).join(" "); return; }
   if (act === "stop") { if (S.gen && S.gen.ctl) S.gen.ctl.abort(); return; }
 });
 $("#home-btn").addEventListener("click", () => go("home", { confirmDelete: null }));
 try { history.replaceState({ bre: 1, view: "home" }, "", location.pathname + location.search); } catch {}
+$("#sq-pay").addEventListener("click", payNow);
+$("#more-form").addEventListener("submit", async (e) => {
+  if (e.submitter && e.submitter.value !== "send") return;
+  e.preventDefault();
+  const btn = e.submitter; btn.disabled = true;
+  try { await window.boardroom.api("/request-decks", { message: $("#more-msg").value }); $("#more-dlg").close(); toast("Request sent. The admin will add decks for you."); }
+  catch (err) {
+    toast(err.code === "already_requested" ? "You've already asked; the admin will get to it." : err.code === "not_enough_learned" ? "Learn 80% of your cards first, then ask again." : "Couldn't send that. Try again.");
+  } finally { btn.disabled = false; }
+});
 document.addEventListener("change", (e) => {
   if (e.target.id === "f-industry") { const o = $("#f-industry-other"); if (o) { o.hidden = e.target.value !== "other"; if (!o.hidden) o.focus(); } }
 });

@@ -18,11 +18,33 @@ service cloud.firestore {
       allow read: if signedInAs(uid);
       allow write: if false;
     }
-    // Decks the admin shared: public ones for everyone signed in, the rest for the accounts they're assigned to.
+    function premium(uid) {
+      let acct = /databases/$(database)/documents/accounts/$(uid);
+      return exists(acct) && get(acct).data.get("premium", false) == true;
+    }
+    // Decks the admin shared: everyone signed in sees the public ones (premium ones too, as a locked card),
+    // and assigned accounts see theirs.
     match /shared/{sid} {
       allow read: if request.auth != null && !suspended(request.auth.uid)
         && (resource.data.public == true || request.auth.uid in resource.data.assignees);
       allow write: if false;
+      // The cards: free public decks for everyone signed in, premium ones for premium accounts, and assigned decks for their accounts.
+      match /content/{doc} {
+        allow read: if request.auth != null && !suspended(request.auth.uid) && (isAdmin() || canPlay(get(/databases/$(database)/documents/shared/$(sid)).data));
+        allow write: if false;
+      }
+    }
+    function canPlay(s) {
+      return request.auth.uid in s.assignees || (s.public == true && (s.get("premium", false) != true || premium(request.auth.uid)));
+    }
+    // The landing deck that visitors play before signing up.
+    match /config/landing {
+      allow read: if true;
+      allow write: if false;
+    }
+    // Premium and more-decks requests: written and read by the server only.
+    match /requests/{id} {
+      allow read, write: if false;
     }
     // Card pictures are served by the image function only.
     match /images/{id} {

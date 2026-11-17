@@ -4,7 +4,7 @@ import { logger } from "firebase-functions";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   HttpError, DECK_ID, verifyUser, getAccount, summary, reserve, settle, deleteDeck, listAccounts, updateAccount, isAdmin,
-  listDecks, shareDeck,
+  listDecks, shareDeck, openRequests, requestPremium, requestDecks, learnedShare, listRequests, closeRequest,
 } from "./accounts.js";
 import { makeImage, serveImage } from "./images.js";
 
@@ -148,7 +148,14 @@ export const account = onRequest(
     try {
       const user = await verifyUser(req);
       const route = req.path.replace(/^\/api\/account/, "").replace(/\/+$/, "") || "/";
-      if (route === "/me" && req.method === "GET") return res.json(summary(await getAccount(user), user));
+      if (route === "/me" && req.method === "GET") {
+        const info = summary(await getAccount(user), user);
+        if (info.isAdmin) info.openRequests = await openRequests().catch(() => 0);
+        return res.json(info);
+      }
+      if (route === "/premium-request" && req.method === "POST") return res.json(await requestPremium(user));
+      if (route === "/learned" && req.method === "GET") return res.json(await learnedShare(user, await getAccount(user)));
+      if (route === "/request-decks" && req.method === "POST") return res.json(await requestDecks(user, (req.body || {}).message));
       if (route === "/delete-deck" && req.method === "POST") {
         const deckId = String((req.body || {}).deckId || "");
         if (!DECK_ID.test(deckId)) throw new HttpError(400, "bad_request");
@@ -168,6 +175,12 @@ export const account = onRequest(
           const { ownerUid, deckId, ...who } = req.body || {};
           await shareDeck(ownerUid, deckId, who);
           return res.json({ decks: await listDecks() });
+        }
+        if (route === "/admin/requests" && req.method === "GET") return res.json({ requests: await listRequests() });
+        if (route === "/admin/request" && req.method === "POST") {
+          const { id, status } = req.body || {};
+          await closeRequest(id, status);
+          return res.json({ requests: await listRequests() });
         }
       }
       return res.status(404).json({ error: "not_found" });
