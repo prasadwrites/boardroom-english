@@ -61,7 +61,7 @@ button { cursor: pointer; }
 #account:empty { display: none; }
 #account .who { color: var(--muted); overflow-wrap: anywhere; }
 #account .btn { padding: 6px 12px; }
-#account a.btn { color: inherit; text-decoration: none; }
+#account a.btn, .deck .actions a.btn { color: inherit; text-decoration: none; }
 .signin { border: 0; border-radius: 12px; padding: 0; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); width: min(400px, calc(100% - 32px)); }
 .signin::backdrop { background: rgba(13,21,32,.45); }
 .signin form { display: grid; gap: 14px; padding: 22px; }
@@ -558,7 +558,7 @@ function getGenerator() {
         } catch (e) { throw { code: signal.aborted ? "cancelled" : "upstream_error" }; }
         if (res.status === 401 || res.status === 403) {
           const err = await res.json().catch(() => ({}));
-          throw { code: err.error === "needs_code" || err.error === "suspended" || err.error === "limit_decks" || err.error === "limit_questions" ? err.error : "signin_required" };
+          throw { code: err.error === "needs_code" || err.error === "suspended" || err.error === "limit_decks" || err.error === "limit_questions" || err.error === "admin_only" ? err.error : "signin_required" };
         }
         if (res.status === 429) throw { code: "rate_limited" };
         if (res.status === 404) throw { code: "no_backend" };
@@ -647,16 +647,19 @@ function render() {
 
 function deckColor(deck, i) { return deck.color || COLORS[i % COLORS.length]; }
 
+/* On the website only the admin creates decks and shares them; inside Claude anyone can. */
+const canCreate = () => IN_CLAUDE || !!(S.account && S.account.isAdmin);
 function renderHome(app) {
   const decks = allDecks();
   app.innerHTML = `
+    ${canCreate() ? "" : `<p class="intro"><strong>Decks the admin shares with you appear here when you sign in.</strong></p>`}
     <p class="intro">Pick a deck to practise. In a quiz deck, cards you miss go to your <strong>Repeat</strong> pile and a card you get right ${LEARN_AT} times in a row moves to <strong>Learned</strong>. In a swipe deck you flip cards to learn words, phrases and idioms, then swipe left when you know one and right to see it again.</p>
     <div class="grid">
-      <button class="deck new-deck" type="button" data-act="create">
+      ${canCreate() ? `<button class="deck new-deck" type="button" data-act="create">
         <span class="plus">+</span>
         <h3>New deck</h3>
-        <span class="focus">A quiz deck or a swipe deck. Describe a focus and an industry, and Claude writes it for you.</span>
-      </button>
+        <span class="focus">A quiz deck or a swipe deck. Describe a focus and an industry, and Claude writes it for you. Then share it from the admin page.</span>
+      </button>` : ""}
       ${decks.map((d, i) => deckCard(d, i)).join("")}
     </div>`;
 }
@@ -678,7 +681,7 @@ function deckCard(d, i) {
     <div class="actions">
       <button class="btn primary" data-act="play" data-id="${d.id}" ${c.total ? "" : "disabled"}>Study</button>
       <button class="btn" data-act="piles" data-id="${d.id}">Piles</button>
-      ${d.builtin || d.shared ? "" : `<button class="btn ghost" data-act="extend" data-id="${d.id}">${isSwipe(d) ? "Add cards" : "Add questions"}</button><button class="btn ghost danger" data-act="del" data-id="${d.id}">Delete</button>`}
+      ${d.builtin || d.shared ? "" : `${canCreate() ? `<button class="btn ghost" data-act="extend" data-id="${d.id}">${isSwipe(d) ? "Add cards" : "Add questions"}</button>` : ""}${canCreate() && !IN_CLAUDE ? `<a class="btn ghost" href="/admin.html#decks">Share</a>` : ""}<button class="btn ghost danger" data-act="del" data-id="${d.id}">Delete</button>`}
     </div>`}
   </article>`;
 }
@@ -722,7 +725,7 @@ function renderPlay() {
   let body;
   if (!cur) {
     body = `<div class="card"><div class="empty"><h3>Every card is learned</h3><p>You've answered all ${deck.questions.length} cards in this deck correctly ${LEARN_AT} times in a row.</p>
-      <div class="next-row" style="justify-content:center"><button class="btn primary" data-act="piles" data-id="${deck.id}" data-tab="learned">Review Learned pile</button>${deck.builtin || deck.shared ? "" : `<button class="btn" data-act="extend" data-id="${deck.id}">Add questions</button>`}</div></div></div>`;
+      <div class="next-row" style="justify-content:center"><button class="btn primary" data-act="piles" data-id="${deck.id}" data-tab="learned">Review Learned pile</button>${deck.builtin || deck.shared || !canCreate() ? "" : `<button class="btn" data-act="extend" data-id="${deck.id}">Add questions</button>`}</div></div></div>`;
   } else {
     const p = prog(deck.id)[cur.q.id] || {};
     const answered = cur.picked != null;
@@ -783,7 +786,7 @@ function renderSwipe(deck) {
   let body;
   if (!cur) {
     body = `<div class="card"><div class="empty"><h3>Every word is learned</h3><p>You've swiped all ${deck.questions.length} cards in this deck into Learned. Move any back from the Learned pile to see them again.</p>
-      <div class="next-row" style="justify-content:center"><button class="btn primary" data-act="piles" data-id="${deck.id}" data-tab="learned">Open Learned pile</button>${deck.builtin || deck.shared ? "" : `<button class="btn" data-act="extend" data-id="${deck.id}">Add cards</button>`}</div></div></div>`;
+      <div class="next-row" style="justify-content:center"><button class="btn primary" data-act="piles" data-id="${deck.id}" data-tab="learned">Open Learned pile</button>${deck.builtin || deck.shared || !canCreate() ? "" : `<button class="btn" data-act="extend" data-id="${deck.id}">Add cards</button>`}</div></div></div>`;
   } else {
     const q = cur.q, p = prog(deck.id)[q.id] || {};
     const type = q.mode === "type" && typeable(q.term);
@@ -964,6 +967,7 @@ function planInfo(ext) {
   const a = S.account;
   if (!a) return { ok: false, max: 0, html: `<div class="msg info plan-msg">Sign in to create decks. Your decks are saved to your account. <button class="btn primary" type="button" data-act="signin">Sign in</button></div>` };
   if (a.suspended) return { ok: false, max: 0, html: `<div class="msg err plan-msg">${esc(FATAL.suspended)}</div>` };
+  if (!a.isAdmin) return { ok: false, max: 0, html: `<div class="msg info plan-msg">${esc(FATAL.admin_only)}</div>` };
   const used = ext ? Math.max(a.decks[ext.id] || 0, ext.questions.length) : 0;
   const max = Math.max(0, a.maxQuestions - used);
   const line = `<strong>${esc(a.planLabel)} plan:</strong> ${a.decksUsed} of ${a.maxDecks} decks used, up to ${a.maxQuestions} questions per deck.`;
@@ -1123,6 +1127,7 @@ const FATAL = { not_granted: "Claude access was declined for this page. Allow it
   signin_required: "Sign in to create decks. Your decks are then saved to your account.",
   suspended: "Your account is suspended, so you can't create decks. Contact the site admin.",
   limit_decks: "You've used all the decks on your plan. Delete a deck or ask the admin to upgrade your plan.",
+  admin_only: "Only the site admin creates decks. Decks the admin shares with you appear on your home page.",
   limit_questions: "This deck has reached the most questions your plan allows. Ask the admin to upgrade your plan for bigger decks.",
   no_backend: "Deck generation isn't set up on this site yet. The study decks still work." };
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();

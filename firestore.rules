@@ -2,13 +2,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedInAs(uid) { return request.auth != null && request.auth.uid == uid; }
+    function isAdmin() { return request.auth != null && request.auth.token.email == "prasad.writes@gmail.com" && request.auth.token.email_verified == true; }
     function suspended(uid) {
       let acct = /databases/$(database)/documents/accounts/$(uid);
       return exists(acct) && get(acct).data.suspended == true;
     }
     // Each signed-in person can read and write only their own decks and piles, unless their account is suspended.
-    match /users/{uid}/{document=**} {
-      allow read, write: if signedInAs(uid) && !suspended(uid);
+    // Only the admin can add a new deck; everyone else gets decks the admin shares, and can still delete or update decks they already have.
+    match /users/{uid}/items/{doc} {
+      allow read, update, delete: if signedInAs(uid) && !suspended(uid);
+      allow create: if signedInAs(uid) && !suspended(uid) && (!doc.matches('deck-.*') || isAdmin());
     }
     // Plan, limits and usage. Only the server (deck generator and admin page) writes these.
     match /accounts/{uid} {

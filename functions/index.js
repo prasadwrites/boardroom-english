@@ -107,6 +107,7 @@ export const generate = onRequest(
     let user, granted;
     try {
       user = await verifyUser(req);
+      if (!isAdmin(user)) throw new HttpError(403, "admin_only"); // only the admin writes decks; others get them shared
       granted = await reserve(user, deckId, want, clip(body.code, 60));
     } catch (err) { return sendError(res, err); }
 
