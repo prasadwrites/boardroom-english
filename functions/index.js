@@ -130,6 +130,7 @@ export const generate = onRequest(
       else { payload = items.slice(0, granted); used = payload.length; }
     } catch (err) {
       if (err instanceof Anthropic.RateLimitError) [status, payload] = [429, { error: "Rate limited" }];
+      else if (err instanceof Anthropic.AuthenticationError) { logger.error("The Anthropic API key was rejected"); [status, payload] = [503, { error: "bad_api_key" }]; }
       else if (err instanceof Anthropic.APIError && /credit balance/i.test(err.message)) { logger.error("Anthropic account is out of credit"); [status, payload] = [402, { error: "no_credit" }]; }
       else if (err instanceof Anthropic.APIError) { logger.error("Claude API error", err.status, err.message); [status, payload] = [502, { error: "Claude API error" }]; }
       else { logger.error("Unexpected error", err); [status, payload] = [500, { error: "Unexpected error" }]; }

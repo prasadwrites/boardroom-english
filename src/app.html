@@ -521,6 +521,7 @@ function getGenerator() {
         if (res.status === 404) throw { code: "no_backend" };
         if (res.status === 422) throw { code: "refused" };
         if (res.status === 402) throw { code: "no_credit" };
+        if (res.status === 503) throw { code: "bad_api_key" };
         if (!res.ok) throw { code: "upstream_error" };
         return res.json();
       },
@@ -1021,6 +1022,7 @@ const FATAL = { not_granted: "Claude access was declined for this page. Allow it
   not_declared: "This version of the page can't use Claude. Reload to get the latest version.",
   capability_disabled: "Claude can't be reached from this view. Open the page in claude.ai or the Claude app.",
   capability_removed: "Claude can't be reached from this view. Open the page in claude.ai or the Claude app.",
+  bad_api_key: "The Anthropic API key behind this site was rejected, so Claude can't write decks right now. The site admin needs to add a new key.",
   no_credit: "The Anthropic API account behind this site is out of credit. Add credit at console.anthropic.com (Plans & Billing), then try again.",
   rate_limited: "You've reached your Claude usage limit for now. Questions made so far are saved; use Add questions later to finish.",
   session_expired: "Your Claude session expired. Sign in again, then use Add questions to continue.",
