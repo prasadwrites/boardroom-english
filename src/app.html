@@ -622,9 +622,10 @@ function setLanding(data) {
 }
 function openLandingOnce() {
   if (!anon() || !S.landing || S.view !== "home") return;
-  try { if (sessionStorage.getItem("boardroom-english.landing") === "1") return; sessionStorage.setItem("boardroom-english.landing", "1"); } catch {}
+  if (S.landed) return; S.landed = true;  // once per visit: arriving at the site opens the landing deck in full screen
   S.cur = null; S.recent = []; S.session = { n: 0, ok: 0, streak: 0 };
   go("play", { deckId: S.landing.id });
+  if (!(S.gate && anon())) setFocus(true);
 }
 function askSignUp() {
   if (window.boardroom.openSignIn) window.boardroom.openSignIn({ title: "Sign up to keep your piles", text: "Create a free account to save your Learned and Repeat piles and keep playing. You'll also get every free deck the admin publishes." });
